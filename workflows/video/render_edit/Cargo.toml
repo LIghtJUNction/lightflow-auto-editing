@@ -1,0 +1,12 @@
+[package]
+name = "lightflow-video-render-edit"
+version = "0.1.0"
+edition = "2024"
+description = "LightFlow workflow contract for rendering automated video edit plans."
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/lightjunction/lightflow-auto-editing"
+keywords = ["lightflow", "workflow", "video", "ffmpeg"]
+categories = ["multimedia::video", "development-tools"]
+
+[dependencies]
+lightflow = "0.1.3"

@@ -1,4 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["workflows/video/auto_edit_plan"]
-
+members = [
+  "workflows/video/auto_edit_plan",
+  "workflows/video/render_edit",
+]

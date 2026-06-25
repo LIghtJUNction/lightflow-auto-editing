@@ -1,0 +1,34 @@
+{
+  "title": "LightFlow Auto Edit Demo",
+  "output": {
+    "width": 720,
+    "height": 1280,
+    "fps": 30
+  },
+  "timeline": [
+    {
+      "clip_id": "hook",
+      "path": "examples/demo/clips/hook.mp4",
+      "start": 0,
+      "end": 2.4,
+      "title": "Hook",
+      "subtitle": "Source clips become a planned edit."
+    },
+    {
+      "clip_id": "steps",
+      "path": "examples/demo/clips/steps.mp4",
+      "start": 0,
+      "end": 2.4,
+      "title": "Assemble",
+      "subtitle": "Trim, normalize, caption, concatenate."
+    },
+    {
+      "clip_id": "outro",
+      "path": "examples/demo/clips/outro.mp4",
+      "start": 0,
+      "end": 2.4,
+      "title": "Render",
+      "subtitle": "The result is a replayable MP4 artifact."
+    }
+  ]
+}
