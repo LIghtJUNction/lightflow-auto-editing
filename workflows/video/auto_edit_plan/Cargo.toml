@@ -1,0 +1,12 @@
+[package]
+name = "lightflow-video-auto-edit-plan"
+version = "0.1.0"
+edition = "2024"
+description = "LightFlow workflow that plans automated video edits from clip metadata."
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/lightjunction/lightflow-auto-editing"
+keywords = ["lightflow", "workflow", "video", "editing"]
+categories = ["multimedia::video", "development-tools"]
+
+[dependencies]
+lightflow = "0.1.3"
