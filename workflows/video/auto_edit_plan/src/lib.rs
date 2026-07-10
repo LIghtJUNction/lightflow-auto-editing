@@ -1,8 +1,7 @@
 use lightflow::preload::*;
 
 pub fn define() -> WorkflowSpec {
-    workflow("lightflow.video.auto_edit_plan")
-        .version("0.1.0")
+    workflow!()
         .name("Video Auto Edit Plan")
         .description("Plan an automated video edit from source clips, narrative goals, style guidance, and delivery constraints.")
         .input("clips", "json")

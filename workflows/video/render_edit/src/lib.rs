@@ -1,8 +1,7 @@
 use lightflow::preload::*;
 
 pub fn define() -> WorkflowSpec {
-    workflow("lightflow.video.render_edit")
-        .version("0.1.0")
+    workflow!()
         .name("Video Render Edit")
         .description("Render a structured edit decision plan into a video artifact using the repository ffmpeg renderer.")
         .input("edit_plan", "json")
