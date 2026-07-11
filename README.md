@@ -52,11 +52,11 @@ examples/output/auto-edit-demo.mp4
 ## Layout
 
 ```text
-workflows/video/auto_edit_plan/
+workflows/auto_edit_plan/
   Cargo.toml
   src/lib.rs
   .agent/skills/lightflow-auto-edit-plan/SKILL.md
-workflows/video/render_edit/
+workflows/render_edit/
   Cargo.toml
   src/lib.rs
   .agent/skills/lightflow-render-edit/SKILL.md
