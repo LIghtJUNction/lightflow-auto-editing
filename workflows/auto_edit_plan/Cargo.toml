@@ -9,4 +9,4 @@ keywords = ["lightflow", "workflow", "video", "editing"]
 categories = ["multimedia::video", "development-tools"]
 
 [dependencies]
-lightflow = "0.1.3"
+lightflow = "0.1.5"

@@ -1,30 +1,37 @@
 use lightflow::preload::*;
 
 pub fn define() -> WorkflowSpec {
-    workflow!()
+    workflow! {
+        input "clips": "json" {
+            description: "Array of source clip records with ids, paths, optional start/end times, transcript snippets, scores, tags, or media analysis.",
+            required: true,
+            widget: "json",
+        }
+        input "brief": "text" {
+            description: "Human editing goal, story outline, or narration/script notes.",
+            required: true,
+            widget: "textarea",
+        }
+        input "style": "text" {
+            description: "Editing style such as tutorial, vlog recap, product demo, shorts cut, or calm documentary.",
+            required: false,
+            default: "clean social edit",
+            widget: "textarea",
+        }
+        input "constraints": "json" {
+            description: "Delivery constraints such as aspect_ratio, max_duration_seconds, fps, caption language, music policy, or platform.",
+            required: false,
+            default: {},
+            widget: "json",
+        }
+        output "edit_plan": "json" {
+            description: "Serializable edit decision plan with selected segments, ordering, transitions, captions, audio notes, and render hints.",
+        }
+        output "summary": "text" {
+            description: "Human-readable summary of the planned edit.",
+        }
+    }
         .name("Video Auto Edit Plan")
         .description("Plan an automated video edit from source clips, narrative goals, style guidance, and delivery constraints.")
-        .input("clips", "json")
-        .input_description("clips", "Array of source clip records with ids, paths, optional start/end times, transcript snippets, scores, tags, or media analysis.")
-        .input_required("clips", true)
-        .input_widget("clips", "json")
-        .input("brief", "text")
-        .input_description("brief", "Human editing goal, story outline, or narration/script notes.")
-        .input_required("brief", true)
-        .input_widget("brief", "textarea")
-        .input("style", "text")
-        .input_description("style", "Editing style such as tutorial, vlog recap, product demo, shorts cut, or calm documentary.")
-        .input_required("style", false)
-        .input_default_json("style", "\"clean social edit\"")
-        .input_widget("style", "textarea")
-        .input("constraints", "json")
-        .input_description("constraints", "Delivery constraints such as aspect_ratio, max_duration_seconds, fps, caption language, music policy, or platform.")
-        .input_required("constraints", false)
-        .input_default_json("constraints", "{}")
-        .input_widget("constraints", "json")
-        .output("edit_plan", "json")
-        .output_description("edit_plan", "Serializable edit decision plan with selected segments, ordering, transitions, captions, audio notes, and render hints.")
-        .output("summary", "text")
-        .output_description("summary", "Human-readable summary of the planned edit.")
         .build()
 }
