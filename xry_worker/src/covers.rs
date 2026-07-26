@@ -1,6 +1,7 @@
 use super::cover_render::cover_variant;
 use super::read_json;
 use serde_json::Value;
+use std::fs;
 use std::path::{Path, PathBuf};
 
 pub(super) fn render_covers(
@@ -28,7 +29,7 @@ pub(super) fn render_covers(
         .pointer("/source/timestamp_seconds")
         .and_then(Value::as_f64)
         .unwrap_or(3.0);
-    let profile = account_profile(&cover)?;
+    let (profile, reference) = account_profile_at_reference_root(&cover, Path::new("/srv/0.参考"))?;
     let accent = accent_for(&cover);
     cover_variant(
         &source,
@@ -53,7 +54,8 @@ pub(super) fn render_covers(
         accent,
         CoverLanguage::Overseas,
         &production.join("cover.re.jpg"),
-    )
+    )?;
+    materialize_cover_original(&reference, production)
 }
 
 #[derive(Debug)]
@@ -122,9 +124,35 @@ fn contains_cyrillic(value: &str) -> bool {
 }
 
 pub(super) fn validate_cover_spec(production: &Path) -> Result<&'static str, String> {
+    validate_cover_spec_at_reference_root(production, Path::new("/srv/0.参考"))
+}
+
+#[cfg(test)]
+pub(super) fn validate_cover_spec_with_reference_root(
+    production: &Path,
+    reference_root: &Path,
+) -> Result<&'static str, String> {
+    validate_cover_spec_at_reference_root(production, reference_root)
+}
+
+#[cfg(test)]
+pub(super) fn materialize_cover_original_with_reference_root(
+    production: &Path,
+    reference_root: &Path,
+) -> Result<(), String> {
+    let cover = read_json(&production.join("cover-spec.json"))?;
+    let (_, reference) = account_profile_at_reference_root(&cover, reference_root)?;
+    materialize_cover_original(&reference, production)
+}
+
+fn validate_cover_spec_at_reference_root(
+    production: &Path,
+    reference_root: &Path,
+) -> Result<&'static str, String> {
     let cover = read_json(&production.join("cover-spec.json"))?;
     cover_text(&cover)?;
-    Ok(account_profile(&cover)?.name())
+    let (profile, _) = account_profile_at_reference_root(&cover, reference_root)?;
+    Ok(profile.name())
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -187,7 +215,15 @@ fn accent_for(cover: &Value) -> &'static str {
     }
 }
 
+#[cfg(test)]
 fn account_profile(cover: &Value) -> Result<CoverProfile, String> {
+    account_profile_at_reference_root(cover, Path::new("/srv/0.参考")).map(|(profile, _)| profile)
+}
+
+fn account_profile_at_reference_root(
+    cover: &Value,
+    reference_root: &Path,
+) -> Result<(CoverProfile, PathBuf), String> {
     let group = cover
         .get("group_name")
         .and_then(Value::as_str)
@@ -197,21 +233,62 @@ fn account_profile(cover: &Value) -> Result<CoverProfile, String> {
         .and_then(Value::as_str)
         .ok_or("cover requires a style reference")?;
     let reference = PathBuf::from(reference.replacen("/srv/xry/", "/srv/", 1));
-    let expected = Path::new("/srv/0.参考").join(group);
+    let expected = reference_root.join(group);
     if !reference.is_file() || !reference.starts_with(&expected) {
         return Err(
             "cover reference must be an existing file under its account group in /srv/0.参考"
                 .to_owned(),
         );
     }
-    match cover.get("profile_id").and_then(Value::as_str) {
-        Some("rounded-smoke-gold") => Ok(CoverProfile::SmokeCard),
-        Some("blue-slash") => Ok(CoverProfile::BlueCapsule),
-        Some("editorial-gold") => Ok(CoverProfile::EditorialGold),
-        Some("navy-orange-impact") => Ok(CoverProfile::OrangeImpact),
-        Some("white-card-orange") => Ok(CoverProfile::WhiteCard),
-        _ => Err("cover profile_id is unregistered; return this account group for a reference-backed profile".to_owned()),
+    let profile = match cover.get("profile_id").and_then(Value::as_str) {
+        Some("rounded-smoke-gold") => CoverProfile::SmokeCard,
+        Some("blue-slash") => CoverProfile::BlueCapsule,
+        Some("editorial-gold") => CoverProfile::EditorialGold,
+        Some("navy-orange-impact") => CoverProfile::OrangeImpact,
+        Some("white-card-orange") => CoverProfile::WhiteCard,
+        _ => return Err("cover profile_id is unregistered; return this account group for a reference-backed profile".to_owned()),
+    };
+    Ok((profile, reference))
+}
+
+fn materialize_cover_original(reference: &Path, production: &Path) -> Result<(), String> {
+    let is_png = reference
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("png"));
+    if !is_png {
+        return Err(
+            "cover style reference must be a PNG before materializing cover-original.png"
+                .to_owned(),
+        );
     }
+    atomic_copy(reference, &production.join("cover-original.png"))
+}
+
+fn atomic_copy(source: &Path, destination: &Path) -> Result<(), String> {
+    if !source.is_file() {
+        return Err(format!("cover reference is missing: {}", source.display()));
+    }
+    let parent = destination
+        .parent()
+        .ok_or("cover-original destination has no parent")?;
+    fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+    let staged = parent.join(format!(
+        ".{}.lightflow-staged",
+        destination
+            .file_name()
+            .and_then(|value| value.to_str())
+            .ok_or("cover-original destination has no valid filename")?
+    ));
+    if let Err(error) = fs::copy(source, &staged) {
+        let _ = fs::remove_file(&staged);
+        return Err(error.to_string());
+    }
+    if let Err(error) = fs::rename(&staged, destination) {
+        let _ = fs::remove_file(&staged);
+        return Err(error.to_string());
+    }
+    Ok(())
 }
 
 /// Wrap a headline into at most two visually balanced lines.
@@ -292,6 +369,7 @@ pub(super) fn title_size(longest: usize, language: CoverLanguage) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
     fn rejects_missing_account_reference() {
@@ -357,5 +435,41 @@ mod tests {
             wrong_ru,
             "cover headline_ru must contain Cyrillic characters"
         );
+    }
+
+    #[test]
+    fn rejects_non_png_reference_for_original_cover_artifact() {
+        let root = temporary_directory("original-cover-extension");
+        let reference = root.join("reference.jpg");
+        let production = root.join("production");
+        fs::write(&reference, b"not a PNG").expect("write non-PNG reference");
+
+        let error = materialize_cover_original(&reference, &production)
+            .expect_err("a non-PNG reference must not be renamed as a PNG");
+        assert_eq!(
+            error,
+            "cover style reference must be a PNG before materializing cover-original.png"
+        );
+        assert!(!production.join("cover-original.png").exists());
+        assert!(
+            !production
+                .join(".cover-original.png.lightflow-staged")
+                .exists()
+        );
+
+        fs::remove_dir_all(root).expect("remove temporary cover root");
+    }
+
+    fn temporary_directory(label: &str) -> PathBuf {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock")
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!(
+            "lightflow-xry-worker-covers-{label}-{}-{nonce}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&path).expect("create temporary cover directory");
+        path
     }
 }
