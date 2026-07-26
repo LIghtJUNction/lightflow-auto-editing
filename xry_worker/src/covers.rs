@@ -230,7 +230,19 @@ fn wrap_title(value: &str, language: CoverLanguage) -> String {
     }
     let middle = chars.len() / 2;
     let split = match language {
-        CoverLanguage::Chinese => middle,
+        CoverLanguage::Chinese => {
+            // Never split inside an ASCII run (model names like D-MAX, GL8).
+            let is_ascii_part =
+                |c: char| c.is_ascii_alphanumeric() || c == '-' || c == '.' || c == '&';
+            let candidates: Vec<usize> = (1..chars.len())
+                .filter(|&i| !(is_ascii_part(chars[i - 1]) && is_ascii_part(chars[i])))
+                .collect();
+            candidates
+                .iter()
+                .min_by_key(|i| i.abs_diff(middle))
+                .copied()
+                .unwrap_or(middle)
+        }
         CoverLanguage::Overseas => {
             let spaces: Vec<usize> = chars
                 .iter()
