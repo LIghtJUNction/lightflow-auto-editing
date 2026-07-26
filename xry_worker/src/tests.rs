@@ -1,3 +1,4 @@
+use super::audit::timeline_duration;
 use super::*;
 
 #[test]

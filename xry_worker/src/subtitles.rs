@@ -36,7 +36,7 @@ pub(super) fn burn(master: &Path, ass: &Path, output: &Path) -> Result<(), Strin
 }
 
 pub(super) fn ass(edl: &Value, events: &[Value], main: &str, sub: &str) -> Result<String, String> {
-    let duration = super::timeline_duration(edl)?;
+    let duration = super::audit::timeline_duration(edl)?;
     let mut output = String::from(
         "[Script Info]\nScriptType: v4.00+\nPlayResX: 1080\nPlayResY: 1920\n\n[V4+ Styles]\nFormat: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding\nStyle: Main,Noto Sans CJK SC,92,&H00FFFFFF,&H000000FF,&H00101010,&H70000000,-1,0,0,0,100,100,0,0,1,4,1,2,60,60,190,1\nStyle: Sub,Noto Sans,54,&H00FFFFFF,&H000000FF,&H00101010,&H70000000,0,0,0,0,100,100,0,0,1,3,1,2,60,60,105,1\n\n[Events]\nFormat: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text\n",
     );

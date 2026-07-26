@@ -18,8 +18,16 @@ pub(super) fn audit_output(
     let re_video = production.join("rendered.re.mp4");
     let ze_duration = video_duration(&ze_video)?;
     let re_duration = video_duration(&re_video)?;
-    if (ze_duration - expected_duration).abs() > 0.2
-        || (re_duration - expected_duration).abs() > 0.2
+    // Concat rounds every segment up to whole output frames, so allow the
+    // drift budget to grow with segment count (~1.5 frames per cut at 30fps).
+    let segment_count = edl
+        .get("video_segments")
+        .and_then(Value::as_array)
+        .map_or(1, Vec::len)
+        .max(1) as f64;
+    let tolerance = (0.05 * segment_count).max(0.2);
+    if (ze_duration - expected_duration).abs() > tolerance
+        || (re_duration - expected_duration).abs() > tolerance
     {
         return Err("rendered video duration does not match frozen EDL".to_owned());
     }
