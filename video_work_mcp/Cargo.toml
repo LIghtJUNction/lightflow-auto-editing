@@ -1,0 +1,15 @@
+[package]
+name = "lightflow-video-work-mcp"
+version = "0.1.0"
+edition = "2024"
+description = "Rust-native authenticated Video Work API MCP client for LightFlow workflows."
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+lightflow = { workspace = true }
+ureq = { version = "2.12.1", features = ["json"] }
+url = "2.5.4"
+libc = "0.2.172"
+
+[dev-dependencies]
+tempfile = "3.14.0"

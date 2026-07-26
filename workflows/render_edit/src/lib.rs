@@ -1,7 +1,14 @@
 use lightflow::preload::*;
+use lightflow::runner::Response;
+use lightflow::serde_json::{Map, Value};
+
+pub const WORKFLOW_ID: &str = "lightflow.video_render_edit";
+pub const WORKFLOW_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 pub fn define() -> WorkflowSpec {
     workflow! {
+        name: "Video Render Edit",
+        description: "Render a structured edit decision plan into a video artifact using the repository ffmpeg renderer.",
         input "edit_plan": "json" {
             description: "Edit decision plan with output settings and ordered timeline segments.",
             required: true,
@@ -25,7 +32,21 @@ pub fn define() -> WorkflowSpec {
             description: "Human-readable render summary.",
         }
     }
-        .name("Video Render Edit")
-        .description("Render a structured edit decision plan into a video artifact using the repository ffmpeg renderer.")
+        .builtin_runtime(
+            "command",
+            "lightflow.command.run",
+            "runner.v1",
+        )
         .build()
+}
+
+pub fn execute(
+    inputs: &Map<String, Value>,
+) -> Result<Response, lightflow_auto_edit_runtime::RuntimeError> {
+    lightflow_auto_edit_runtime::execute(
+        WORKFLOW_ID,
+        WORKFLOW_VERSION,
+        inputs,
+        include_str!("lib.rs"),
+    )
 }

@@ -1,0 +1,17 @@
+[package]
+name = "lightflow-video-work-voice-profile"
+version = "0.1.0"
+edition = "2024"
+description = "Consent-gated LightFlow workflow for Video Work API voice profiles."
+license = "MIT OR Apache-2.0"
+
+[package.metadata.lightflow]
+runner = "lightflow-video-work-voice-profile-runner"
+
+[[bin]]
+name = "lightflow-video-work-voice-profile-runner"
+path = "src/bin/runner.rs"
+
+[dependencies]
+lightflow = { workspace = true }
+lightflow-video-work-mcp = { workspace = true }

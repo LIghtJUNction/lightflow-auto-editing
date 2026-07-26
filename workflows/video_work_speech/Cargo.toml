@@ -1,0 +1,17 @@
+[package]
+name = "lightflow-video-work-speech"
+version = "0.1.0"
+edition = "2024"
+description = "LightFlow workflow for Video Work API consent-gated speech generation."
+license = "MIT OR Apache-2.0"
+
+[package.metadata.lightflow]
+runner = "lightflow-video-work-speech-runner"
+
+[[bin]]
+name = "lightflow-video-work-speech-runner"
+path = "src/bin/runner.rs"
+
+[dependencies]
+lightflow = { workspace = true }
+lightflow-video-work-mcp = { workspace = true }

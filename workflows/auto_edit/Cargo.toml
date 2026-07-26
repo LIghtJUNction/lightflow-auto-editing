@@ -1,0 +1,23 @@
+[package]
+name = "lightflow-video-auto-edit"
+version = "0.1.0"
+edition = "2024"
+description = "End-to-end LightFlow workflow for automatic video planning and rendering."
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/lightjunction/lightflow-auto-editing"
+keywords = ["lightflow", "workflow", "video", "editing"]
+categories = ["multimedia::video", "development-tools"]
+
+[package.metadata.lightflow]
+runner = "lightflow-video-auto-edit-runner"
+
+[[bin]]
+name = "lightflow-video-auto-edit-runner"
+path = "src/bin/runner.rs"
+
+[dependencies]
+lightflow = { workspace = true }
+lightflow-auto-edit-runtime = { workspace = true }
+
+[dev-dependencies]
+lightflow-video-highlights = { path = "../video_highlights", version = "0.1.0" }
