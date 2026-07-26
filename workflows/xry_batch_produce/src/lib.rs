@@ -152,11 +152,11 @@ fn required_text<'a>(
         .ok_or_else(|| ProduceError::new("missing required text input"))
 }
 fn safe_task(value: &str) -> Result<String, ProduceError> {
-    if !value.starts_with("批量剪辑/")
+    if !(value.starts_with("批量剪辑/") || value.starts_with("精剪/"))
         || value.split('/').any(|part| part.is_empty() || part == "..")
     {
         return Err(ProduceError::new(
-            "task must be a safe path below 批量剪辑/",
+            "task must be a safe path below 批量剪辑/ or 精剪/",
         ));
     }
     Ok(value.to_owned())

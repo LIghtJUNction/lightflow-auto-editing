@@ -143,10 +143,11 @@ fn optional_text<'a>(
 }
 
 fn safe_task(task: &str) -> Result<String, ControlError> {
-    if !task.starts_with("批量剪辑/") || task.split('/').any(|part| part == ".." || part.is_empty())
+    if !(task.starts_with("批量剪辑/") || task.starts_with("精剪/"))
+        || task.split('/').any(|part| part == ".." || part.is_empty())
     {
         return Err(ControlError::new(
-            "task must be a safe path below 批量剪辑/",
+            "task must be a safe path below 批量剪辑/ or 精剪/",
         ));
     }
     Ok(task.to_owned())

@@ -14,7 +14,7 @@ use delivery::package;
 use subtitles::{ass, burn};
 
 const ROOT: &str = "/srv";
-const TASK_PREFIX: &str = "批量剪辑/";
+const TASK_PREFIXES: [&str; 2] = ["批量剪辑/", "精剪/"];
 
 fn main() -> ExitCode {
     match run(env::args().skip(1).collect()) {
@@ -79,9 +79,12 @@ fn parse_args(args: &[String]) -> Result<(String, String, Option<String>), Strin
         index += 2;
     }
     let task = task.ok_or("missing --task")?;
-    if !task.starts_with(TASK_PREFIX) || task.split('/').any(|part| part.is_empty() || part == "..")
+    if !TASK_PREFIXES
+        .iter()
+        .any(|prefix| task.starts_with(prefix))
+        || task.split('/').any(|part| part.is_empty() || part == "..")
     {
-        return Err("task must be a safe path below 批量剪辑/".to_owned());
+        return Err("task must be a safe path below 批量剪辑/ or 精剪/".to_owned());
     }
     if subject
         .as_deref()
@@ -243,9 +246,14 @@ fn render(task: &str, subject: &str, production: &Path) -> Result<Value, String>
         let item = overlay
             .as_object()
             .ok_or("b-roll overlay must be an object")?;
-        if field_text(item, "type")? != "hold" {
-            return Err("only hold b-roll overlays are supported".to_owned());
-        }
+        let declared = item.get("type").and_then(Value::as_str);
+        let kind = match declared {
+            Some("hold") => "hold",
+            Some("clip") => "clip",
+            None if item.contains_key("source_time") => "hold",
+            None if item.contains_key("in") && item.contains_key("out") => "clip",
+            _ => return Err("b-roll overlay type must be hold or clip".to_owned()),
+        };
         let source_name = field_text(item, "source")?;
         if Path::new(source_name)
             .file_name()
@@ -258,24 +266,48 @@ fn render(task: &str, subject: &str, production: &Path) -> Result<Value, String>
         if !source.is_file() {
             return Err(format!("b-roll source is missing: {}", source.display()));
         }
-        let source_time = field_number(item, "source_time")?;
         let timeline_in = field_number(item, "timeline_in")?;
         let timeline_out = field_number(item, "timeline_out")?;
-        if !(0.0 <= source_time && 0.0 <= timeline_in && timeline_in < timeline_out) {
+        if !(0.0 <= timeline_in && timeline_in < timeline_out) {
             return Err("b-roll overlay timing is invalid".to_owned());
         }
+        let window = timeline_out - timeline_in;
+        let seek = if kind == "hold" {
+            let source_time = field_number(item, "source_time")?;
+            if source_time < 0.0 {
+                return Err("b-roll overlay timing is invalid".to_owned());
+            }
+            source_time
+        } else {
+            let clip_in = field_number(item, "in")?;
+            let clip_out = field_number(item, "out")?;
+            if !(0.0 <= clip_in && clip_in < clip_out) {
+                return Err("b-roll overlay timing is invalid".to_owned());
+            }
+            if ((clip_out - clip_in) - window).abs() > 0.05 {
+                return Err("clip b-roll duration must match its timeline window".to_owned());
+            }
+            clip_in
+        };
         let input_index = segments.len() + overlay_index;
         command.args([
             "-ss",
-            &format!("{source_time:.6}"),
+            &format!("{seek:.6}"),
             "-t",
-            &format!("{:.6}", timeline_out - timeline_in),
+            &format!("{window:.6}"),
             "-i",
         ]);
         command.arg(source);
         let overlay_label = format!("overlay{overlay_index}");
         let result_label = format!("main{overlay_index}");
-        filters.push(format!("[{input_index}:v]scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30,format=yuv420p[{overlay_label}]"));
+        // A clip overlay plays through its window, so its frames must carry
+        // timeline PTS; a hold shows one cloned frame for the whole window.
+        let pts = if kind == "clip" {
+            format!(",setpts=PTS-STARTPTS+{timeline_in:.6}/TB")
+        } else {
+            String::new()
+        };
+        filters.push(format!("[{input_index}:v]scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30,format=yuv420p{pts}[{overlay_label}]"));
         filters.push(format!("[{video_label}][{overlay_label}]overlay=enable='between(t,{timeline_in:.6},{timeline_out:.6})'[{result_label}]"));
         video_label = result_label;
     }

@@ -25,3 +25,11 @@ highlights from scene, silence, filename, or transcript heuristics.
 Use the package-owned Rust `runner.v1` path through `lfw run`; do not invoke
 repository scripts directly. Update this skill whenever the clip provenance
 contract or common workflow invocation changes.
+
+## API Usage
+
+```bash
+curl -sS -X POST http://127.0.0.1:5174/workflows/lightflow.video_auto_edit/run \
+  -H 'content-type: application/json' \
+  -d '{"inputs":{"sources":[{"id":"clip-1","path":"media/long-interview.mp4","start":12.0,"end":18.5,"highlight":{"workflow":"lightflow.video_highlights","source_path":"media/long-interview.mp4","start_seconds":12.0,"end_seconds":18.5,"aggregate_score":3.2,"model":"TIGER-Lab/VideoScore-v1.1","reason":"clear walk-around","evidence":"<hmac-sha256-hex>"}}],"brief":"Energetic highlight cut.","output_path":"output/auto-edit.mp4"}}'
+```
