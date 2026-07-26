@@ -1,0 +1,14 @@
+[package]
+name = "lightflow-auto-edit-runtime"
+version = "0.1.0"
+edition = "2024"
+description = "Rust-native package-owned runtime for LightFlow automatic video editing workflows."
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/lightjunction/lightflow-auto-editing"
+keywords = ["lightflow", "workflow", "video", "editing"]
+categories = ["multimedia::video", "development-tools"]
+include = ["Cargo.toml", "src/**"]
+
+[dependencies]
+lightflow = { workspace = true }
+ring = "0.17.14"

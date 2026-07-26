@@ -1,0 +1,19 @@
+[package]
+name = "lightflow-video-highlights"
+version = "0.1.0"
+edition = "2024"
+description = "VideoScore-backed long-video highlight candidate detection for LightFlow."
+license = "MIT OR Apache-2.0"
+
+[package.metadata.lightflow]
+runner = "lightflow-video-highlights-runner"
+
+[[bin]]
+name = "lightflow-video-highlights-runner"
+path = "src/bin/runner.rs"
+
+[dependencies]
+lightflow = { workspace = true }
+ring = "0.17.14"
+ureq = { version = "2.12.1", features = ["json"] }
+url = "2.5.4"

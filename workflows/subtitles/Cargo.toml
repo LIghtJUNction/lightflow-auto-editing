@@ -1,0 +1,20 @@
+[package]
+name = "lightflow-video-subtitles"
+version = "0.1.0"
+edition = "2024"
+description = "LightFlow workflow for explicit multilingual subtitle tracks."
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/lightjunction/lightflow-auto-editing"
+keywords = ["lightflow", "workflow", "video", "subtitles"]
+categories = ["multimedia::video", "development-tools"]
+
+[package.metadata.lightflow]
+runner = "lightflow-video-subtitles-runner"
+
+[[bin]]
+name = "lightflow-video-subtitles-runner"
+path = "src/bin/runner.rs"
+
+[dependencies]
+lightflow = { workspace = true }
+lightflow-auto-edit-runtime = { workspace = true }

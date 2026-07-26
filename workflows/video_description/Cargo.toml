@@ -1,0 +1,18 @@
+[package]
+name = "lightflow-video-description"
+version = "0.1.0"
+edition = "2024"
+description = "Rust-native model-generated, fact-checked video descriptions for LightFlow."
+license = "MIT OR Apache-2.0"
+
+[package.metadata.lightflow]
+runner = "lightflow-video-description-runner"
+
+[[bin]]
+name = "lightflow-video-description-runner"
+path = "src/bin/runner.rs"
+
+[dependencies]
+lightflow = { workspace = true }
+ureq = { version = "2.12.1", features = ["json"] }
+url = "2.5.4"

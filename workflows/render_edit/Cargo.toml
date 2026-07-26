@@ -8,5 +8,13 @@ repository = "https://github.com/lightjunction/lightflow-auto-editing"
 keywords = ["lightflow", "workflow", "video", "ffmpeg"]
 categories = ["multimedia::video", "development-tools"]
 
+[package.metadata.lightflow]
+runner = "lightflow-video-render-edit-runner"
+
+[[bin]]
+name = "lightflow-video-render-edit-runner"
+path = "src/bin/runner.rs"
+
 [dependencies]
-lightflow = "0.1.5"
+lightflow = { workspace = true }
+lightflow-auto-edit-runtime = { workspace = true }

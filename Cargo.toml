@@ -1,6 +1,24 @@
 [workspace]
 resolver = "3"
 members = [
+  "video_work_mcp",
+  "xry_worker",
+  "workflows/video_description",
+  "workflows/video_highlights",
+  "runtime",
+  "workflows/auto_edit",
   "workflows/auto_edit_plan",
+  "workflows/cover_image",
   "workflows/render_edit",
+  "workflows/subtitles",
+  "workflows/xry_batch_produce",
+  "workflows/xry_batch_control",
+  "workflows/video_work_subtitles",
+  "workflows/video_work_voice_profile",
+  "workflows/video_work_speech",
 ]
+
+[workspace.dependencies]
+lightflow = { version = "0.1.4", path = "../..", default-features = false }
+lightflow-auto-edit-runtime = { version = "0.1.0", path = "runtime" }
+lightflow-video-work-mcp = { version = "0.1.0", path = "video_work_mcp" }
