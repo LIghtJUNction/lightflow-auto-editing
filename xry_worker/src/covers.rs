@@ -244,10 +244,17 @@ fn wrap_title(value: &str, language: CoverLanguage) -> String {
                 .unwrap_or(middle)
         }
         CoverLanguage::Overseas => {
+            // Break only at spaces that don't sit inside a digit group (10 000).
             let spaces: Vec<usize> = chars
                 .iter()
                 .enumerate()
-                .filter(|(_, c)| **c == ' ')
+                .filter(|&(i, c)| {
+                    *c == ' '
+                        && !(i > 0
+                            && i + 1 < chars.len()
+                            && chars[i - 1].is_ascii_digit()
+                            && chars[i + 1].is_ascii_digit())
+                })
                 .map(|(i, _)| i)
                 .collect();
             spaces
