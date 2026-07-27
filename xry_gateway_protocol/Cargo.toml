@@ -1,0 +1,11 @@
+[package]
+name = "lightflow-xry-gateway-protocol"
+version = "0.1.0"
+edition = "2024"
+description = "Strict framed v1 request protocol for the fail-closed XRY gateway handler."
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }

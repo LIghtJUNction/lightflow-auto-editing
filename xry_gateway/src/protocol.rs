@@ -3,13 +3,15 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
 
 use crate::protocol_frame;
 
 pub const PROTOCOL_VERSION: &str = "lightflow.xry.gateway.v1";
 pub const SUBSYSTEM_NAME: &str = "lightflow-xry-gateway-v1";
 pub(crate) use crate::protocol_frame::MAX_FRAME_BYTES;
+pub use crate::protocol_response::{
+    GatewayResponse, ProductionResult, REDACTION_POLICY_VERSION, RedactionResult, RedactionState,
+};
 
 static REQUEST_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 
@@ -70,6 +72,7 @@ pub enum GatewayAction {
     Cleanup,
     Archive,
     Produce,
+    Redact,
 }
 
 impl GatewayAction {
@@ -80,6 +83,7 @@ impl GatewayAction {
             Self::Cleanup => "cleanup",
             Self::Archive => "archive",
             Self::Produce => "produce",
+            Self::Redact => "redact",
         }
     }
 }
@@ -95,6 +99,23 @@ impl From<ControlAction> for GatewayAction {
     }
 }
 
+/// A bounded receipt reference that deliberately cannot carry a path, command, or free-form text.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(transparent)]
+pub struct OpaqueReference(String);
+
+impl OpaqueReference {
+    pub fn new(value: impl Into<String>) -> Result<Self, GatewayError> {
+        let value = value.into();
+        validate_opaque_reference(&value)?;
+        Ok(Self(value))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct GatewayRequest {
     protocol: &'static str,
@@ -105,6 +126,7 @@ pub struct GatewayRequest {
     subject: String,
     apply: bool,
     plan_sha256: Option<String>,
+    confirmation_receipt_ref: Option<OpaqueReference>,
 }
 
 #[derive(Serialize)]
@@ -116,6 +138,7 @@ struct UnsignedGatewayRequest<'a> {
     subject: &'a str,
     apply: bool,
     plan_sha256: Option<&'a str>,
+    confirmation_receipt_ref: Option<&'a str>,
 }
 
 impl GatewayRequest {
@@ -142,9 +165,18 @@ impl GatewayRequest {
                     ));
                 }
             }
-            GatewayAction::Produce => unreachable!("control actions never map to produce"),
+            GatewayAction::Produce | GatewayAction::Redact => {
+                unreachable!("control actions never map to produce or redact")
+            }
         }
-        Self::new(action, task.into(), subject.into(), apply, plan_sha256)
+        Self::new(
+            action,
+            task.into(),
+            subject.into(),
+            apply,
+            plan_sha256,
+            None,
+        )
     }
 
     pub fn produce(
@@ -157,6 +189,24 @@ impl GatewayRequest {
             subject.into(),
             false,
             None,
+            None,
+        )
+    }
+
+    pub fn redact(
+        task: impl Into<String>,
+        subject: impl Into<String>,
+        apply: bool,
+        plan_sha256: Option<String>,
+        confirmation_receipt_ref: Option<String>,
+    ) -> Result<Self, GatewayError> {
+        Self::new(
+            GatewayAction::Redact,
+            task.into(),
+            subject.into(),
+            apply,
+            plan_sha256,
+            confirmation_receipt_ref,
         )
     }
 
@@ -166,17 +216,24 @@ impl GatewayRequest {
         subject: String,
         apply: bool,
         plan_sha256: Option<String>,
+        confirmation_receipt_ref: Option<String>,
     ) -> Result<Self, GatewayError> {
         validate_task(&task)?;
         validate_subject(&subject)?;
         if let Some(plan_sha256) = plan_sha256.as_deref() {
             validate_sha256(plan_sha256, "plan_sha256")?;
         }
-        if action == GatewayAction::Produce && (apply || plan_sha256.is_some()) {
-            return Err(GatewayError::new(
-                "produce does not accept apply or plan_sha256",
-            ));
-        }
+        let confirmation_receipt_ref = confirmation_receipt_ref
+            .map(OpaqueReference::new)
+            .transpose()?;
+        validate_action_contract(
+            action,
+            apply,
+            plan_sha256.as_deref(),
+            confirmation_receipt_ref
+                .as_ref()
+                .map(OpaqueReference::as_str),
+        )?;
 
         let request_id = next_request_id();
         let unsigned = UnsignedGatewayRequest {
@@ -187,6 +244,9 @@ impl GatewayRequest {
             subject: &subject,
             apply,
             plan_sha256: plan_sha256.as_deref(),
+            confirmation_receipt_ref: confirmation_receipt_ref
+                .as_ref()
+                .map(OpaqueReference::as_str),
         };
         let request_sha256 = protocol_frame::request_sha256(&unsigned)?;
         Ok(Self {
@@ -198,6 +258,7 @@ impl GatewayRequest {
             subject,
             apply,
             plan_sha256,
+            confirmation_receipt_ref,
         })
     }
 
@@ -221,109 +282,18 @@ impl GatewayRequest {
         &self.request_sha256
     }
 
-    fn apply(&self) -> bool {
+    pub(crate) fn apply(&self) -> bool {
         self.apply
     }
 
-    fn plan_sha256(&self) -> Option<&str> {
+    pub(crate) fn plan_sha256(&self) -> Option<&str> {
         self.plan_sha256.as_deref()
     }
-}
 
-#[derive(Debug, Clone)]
-pub struct GatewayResponse {
-    request_sha256: String,
-    action: GatewayAction,
-    task: String,
-    subject: String,
-    apply: bool,
-    plan_sha256: Option<String>,
-    gateway_identity: String,
-    receipt_sha256: String,
-    report: Value,
-}
-
-#[derive(Debug, Clone)]
-pub struct ProductionResult {
-    pub worker_context: Value,
-    pub production_report: Value,
-    pub task_state_path: String,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct GatewayResponseEnvelope {
-    protocol: String,
-    request_id: String,
-    request_sha256: String,
-    action: GatewayAction,
-    stage: GatewayAction,
-    task: String,
-    subject: String,
-    apply: bool,
-    plan_sha256: Value,
-    status: GatewayStatus,
-    gateway_identity: String,
-    receipt_sha256: String,
-    report: Value,
-}
-
-#[derive(Debug, Deserialize)]
-enum GatewayStatus {
-    #[serde(rename = "PASS")]
-    Pass,
-}
-
-impl GatewayResponse {
-    pub fn report(&self) -> &Value {
-        &self.report
-    }
-
-    pub fn replay_fingerprint(&self) -> Value {
-        json!({
-            "gateway_protocol": PROTOCOL_VERSION,
-            "gateway_identity": self.gateway_identity,
-            "receipt_sha256": self.receipt_sha256,
-            "request_sha256": self.request_sha256,
-            "action": self.action.as_str(),
-            "task": self.task,
-            "subject": self.subject,
-            "apply": self.apply,
-            "plan_sha256": self.plan_sha256,
-        })
-    }
-
-    pub fn production_result(&self) -> Result<ProductionResult, GatewayError> {
-        if self.action != GatewayAction::Produce {
-            return Err(GatewayError::new(
-                "only a canonical produce response can contain worker context",
-            ));
-        }
-        let report = self
-            .report
-            .as_object()
-            .ok_or_else(|| GatewayError::new("canonical report must be an object"))?;
-        let worker_context = report
-            .get("worker_context")
-            .filter(|value| value.is_object())
-            .cloned()
-            .ok_or_else(|| GatewayError::new("produce report lacks worker_context object"))?;
-        let production_report = report
-            .get("production_report")
-            .filter(|value| value.is_object())
-            .cloned()
-            .ok_or_else(|| GatewayError::new("produce report lacks production_report object"))?;
-        let task_state_path = report
-            .get("task_state_path")
-            .and_then(Value::as_str)
-            .filter(|value| valid_nonempty_text(value, 1024))
-            .map(ToOwned::to_owned)
-            .ok_or_else(|| GatewayError::new("produce report lacks task_state_path"))?;
-        Ok(ProductionResult {
-            worker_context,
-            production_report,
-            task_state_path,
-        })
+    pub(crate) fn confirmation_receipt_ref(&self) -> Option<&str> {
+        self.confirmation_receipt_ref
+            .as_ref()
+            .map(OpaqueReference::as_str)
     }
 }
 
@@ -335,54 +305,7 @@ pub(crate) fn decode_response_frame(
     bytes: &[u8],
     request: &GatewayRequest,
 ) -> Result<GatewayResponse, GatewayError> {
-    let envelope: GatewayResponseEnvelope = protocol_frame::decode_frame(bytes)?;
-    if envelope.protocol != PROTOCOL_VERSION {
-        return Err(GatewayError::new("gateway response protocol mismatch"));
-    }
-    if envelope.request_id != request.request_id {
-        return Err(GatewayError::new("gateway response request_id mismatch"));
-    }
-    if envelope.request_sha256 != request.request_sha256 {
-        return Err(GatewayError::new(
-            "gateway response request_sha256 mismatch",
-        ));
-    }
-    if envelope.action != request.action || envelope.stage != request.action {
-        return Err(GatewayError::new(
-            "gateway response action or stage mismatch",
-        ));
-    }
-    if envelope.task != request.task || envelope.subject != request.subject {
-        return Err(GatewayError::new(
-            "gateway response task or subject mismatch",
-        ));
-    }
-    if envelope.apply != request.apply() {
-        return Err(GatewayError::new("gateway response apply mismatch"));
-    }
-    let plan_sha256 = nullable_sha256(&envelope.plan_sha256)?;
-    if plan_sha256.as_deref() != request.plan_sha256() {
-        return Err(GatewayError::new("gateway response plan_sha256 mismatch"));
-    }
-    let GatewayStatus::Pass = envelope.status;
-    if !valid_nonempty_text(&envelope.gateway_identity, 256) {
-        return Err(GatewayError::new("gateway identity is invalid"));
-    }
-    validate_sha256(&envelope.receipt_sha256, "receipt_sha256")?;
-    if !envelope.report.is_object() {
-        return Err(GatewayError::new("canonical report must be an object"));
-    }
-    Ok(GatewayResponse {
-        request_sha256: envelope.request_sha256,
-        action: envelope.action,
-        task: envelope.task,
-        subject: envelope.subject,
-        apply: envelope.apply,
-        plan_sha256,
-        gateway_identity: envelope.gateway_identity,
-        receipt_sha256: envelope.receipt_sha256,
-        report: envelope.report,
-    })
+    crate::protocol_response::decode_response_frame(bytes, request)
 }
 
 fn validate_task(task: &str) -> Result<(), GatewayError> {
@@ -434,14 +357,7 @@ fn valid_path_segment(segment: &str) -> bool {
         && !segment.chars().any(char::is_control)
 }
 
-fn valid_nonempty_text(value: &str, maximum_bytes: usize) -> bool {
-    !value.is_empty()
-        && value.trim() == value
-        && value.len() <= maximum_bytes
-        && !value.chars().any(char::is_control)
-}
-
-fn validate_sha256(value: &str, name: &str) -> Result<(), GatewayError> {
+pub(crate) fn validate_sha256(value: &str, name: &str) -> Result<(), GatewayError> {
     if value.len() == 64
         && value
             .bytes()
@@ -455,17 +371,59 @@ fn validate_sha256(value: &str, name: &str) -> Result<(), GatewayError> {
     }
 }
 
-fn nullable_sha256(value: &Value) -> Result<Option<String>, GatewayError> {
-    match value {
-        Value::Null => Ok(None),
-        Value::String(value) => {
-            validate_sha256(value, "plan_sha256")?;
-            Ok(Some(value.clone()))
+fn validate_action_contract(
+    action: GatewayAction,
+    apply: bool,
+    plan_sha256: Option<&str>,
+    confirmation_receipt_ref: Option<&str>,
+) -> Result<(), GatewayError> {
+    match action {
+        GatewayAction::Progress | GatewayAction::Freeze
+            if apply || plan_sha256.is_some() || confirmation_receipt_ref.is_some() =>
+        {
+            Err(GatewayError::new(
+                "progress and freeze do not accept apply, plan_sha256, or confirmation_receipt_ref",
+            ))
         }
-        _ => Err(GatewayError::new(
-            "gateway response plan_sha256 must be a string or null",
-        )),
+        GatewayAction::Cleanup | GatewayAction::Archive
+            if confirmation_receipt_ref.is_some() || (apply && plan_sha256.is_none()) =>
+        {
+            Err(GatewayError::new(
+                "cleanup and archive require plan_sha256 when apply is true and reject confirmation_receipt_ref",
+            ))
+        }
+        GatewayAction::Produce
+            if apply || plan_sha256.is_some() || confirmation_receipt_ref.is_some() =>
+        {
+            Err(GatewayError::new(
+                "produce does not accept apply, plan_sha256, or confirmation_receipt_ref",
+            ))
+        }
+        GatewayAction::Redact
+            if !matches!(
+                (
+                    apply,
+                    plan_sha256.is_some(),
+                    confirmation_receipt_ref.is_some()
+                ),
+                (false, false, false) | (true, true, true)
+            ) =>
+        {
+            Err(GatewayError::new(
+                "redact preview requires null plan_sha256 and confirmation_receipt_ref; apply requires both",
+            ))
+        }
+        _ => Ok(()),
     }
+}
+
+fn validate_opaque_reference(value: &str) -> Result<(), GatewayError> {
+    let Some(hash) = value.strip_prefix("opaque:") else {
+        return Err(GatewayError::new(
+            "opaque references must use the opaque:<sha256> form",
+        ));
+    };
+    validate_sha256(hash, "opaque reference")
 }
 
 fn next_request_id() -> String {

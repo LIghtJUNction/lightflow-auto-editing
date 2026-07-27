@@ -1,0 +1,20 @@
+[package]
+name = "lightflow-xry-privacy-redaction"
+version = "0.1.0"
+edition = "2024"
+description = "Bound LightFlow pre-delivery stage for canonical XRY person redaction."
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/lightjunction/lightflow-auto-editing"
+keywords = ["lightflow", "workflow", "privacy", "xry"]
+categories = ["multimedia::video", "development-tools"]
+
+[package.metadata.lightflow]
+runner = "lightflow-xry-privacy-redaction-runner"
+
+[[bin]]
+name = "lightflow-xry-privacy-redaction-runner"
+path = "src/bin/runner.rs"
+
+[dependencies]
+lightflow = { workspace = true }
+lightflow-xry-gateway = { path = "../../xry_gateway" }

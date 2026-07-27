@@ -1,0 +1,10 @@
+[package]
+name = "lightflow-xry-gateway-handler"
+version = "0.1.0"
+edition = "2024"
+description = "Non-routable fail-closed staging handler for the XRY gateway subsystem."
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+lightflow-xry-gateway-protocol = { path = "../xry_gateway_protocol", version = "0.1.0" }
+serde = { workspace = true }

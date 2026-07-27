@@ -2,6 +2,7 @@
 resolver = "3"
 members = [
   "video_work_mcp",
+  "command_dispatcher",
   "xry_gateway",
   "xry_worker",
   "workflows/video_description",
@@ -17,10 +18,13 @@ members = [
   "workflows/video_work_subtitles",
   "workflows/video_work_voice_profile",
   "workflows/video_work_speech",
+  "xry_gateway_protocol",
+  "xry_gateway_handler",
+  "workflows/xry_privacy_redaction",
 ]
 
 [workspace.dependencies]
-lightflow = { version = "0.1.4", path = "../..", default-features = false }
+lightflow = { version = "0.2.0", path = "../..", default-features = false }
 lightflow-auto-edit-runtime = { version = "0.1.0", path = "runtime" }
 lightflow-video-work-mcp = { version = "0.1.0", path = "video_work_mcp" }
 serde = { version = "1.0.228", features = ["derive"] }

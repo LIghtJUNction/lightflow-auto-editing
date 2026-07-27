@@ -5,10 +5,12 @@
 
 mod protocol;
 mod protocol_frame;
+mod protocol_response;
 mod transport;
 
 pub use protocol::{
-    ControlAction, GatewayAction, GatewayError, GatewayRequest, GatewayResponse, PROTOCOL_VERSION,
-    ProductionResult, SUBSYSTEM_NAME,
+    ControlAction, GatewayAction, GatewayError, GatewayRequest, GatewayResponse, OpaqueReference,
+    PROTOCOL_VERSION, ProductionResult, REDACTION_POLICY_VERSION, RedactionResult, RedactionState,
+    SUBSYSTEM_NAME,
 };
 pub use transport::{invoke, trusted_transport_ready};

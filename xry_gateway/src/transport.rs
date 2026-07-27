@@ -23,6 +23,29 @@ const MAX_STDERR_BYTES: usize = 64 * 1024;
 const GATEWAY_TIMEOUT: Duration = Duration::from_secs(4 * 60 * 60);
 const POLL_INTERVAL: Duration = Duration::from_millis(100);
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum GatewayExitCategory {
+    AuthenticationRejected,
+    HostKeyRejected,
+    FixedSubsystemUnavailable,
+    FixedRouteUnreachable,
+    UnknownCanonicalNonPass,
+}
+
+impl GatewayExitCategory {
+    const fn message(self) -> &'static str {
+        match self {
+            Self::AuthenticationRejected => "gateway canonical non-PASS: authentication rejected",
+            Self::HostKeyRejected => "gateway canonical non-PASS: host-key rejected",
+            Self::FixedSubsystemUnavailable => {
+                "gateway canonical non-PASS: fixed subsystem unavailable"
+            }
+            Self::FixedRouteUnreachable => "gateway canonical non-PASS: fixed route unreachable",
+            Self::UnknownCanonicalNonPass => "gateway canonical non-PASS: unknown",
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 struct GatewayPaths {
     home: PathBuf,
@@ -94,13 +117,58 @@ pub fn invoke(request: &GatewayRequest) -> Result<GatewayResponse, GatewayError>
         }
     };
     let stdout = join_reader(stdout_reader, "stdout")?;
-    let _stderr = join_reader(stderr_reader, "stderr")?;
+    let stderr = join_reader(stderr_reader, "stderr")?;
     if !status.success() {
-        return Err(GatewayError::new(
-            "gateway subsystem exited without canonical PASS",
-        ));
+        return Err(nonzero_gateway_exit_error(&stderr));
     }
     decode_response_frame(&stdout, request)
+}
+
+fn nonzero_gateway_exit_error(stderr: &[u8]) -> GatewayError {
+    GatewayError::new(classify_nonzero_gateway_exit(stderr).message())
+}
+
+fn classify_nonzero_gateway_exit(stderr: &[u8]) -> GatewayExitCategory {
+    let diagnostic = String::from_utf8_lossy(stderr).to_ascii_lowercase();
+
+    if contains_any(
+        &diagnostic,
+        &[
+            "host key verification failed",
+            "remote host identification has changed",
+        ],
+    ) {
+        GatewayExitCategory::HostKeyRejected
+    } else if contains_any(
+        &diagnostic,
+        &[
+            "permission denied (publickey",
+            "no more authentication methods to try",
+        ],
+    ) {
+        GatewayExitCategory::AuthenticationRejected
+    } else if diagnostic.contains("subsystem request failed") {
+        GatewayExitCategory::FixedSubsystemUnavailable
+    } else if diagnostic.contains("could not resolve hostname")
+        || (diagnostic.contains("connect to host")
+            && contains_any(
+                &diagnostic,
+                &[
+                    "connection refused",
+                    "connection timed out",
+                    "network is unreachable",
+                    "no route to host",
+                ],
+            ))
+    {
+        GatewayExitCategory::FixedRouteUnreachable
+    } else {
+        GatewayExitCategory::UnknownCanonicalNonPass
+    }
+}
+
+fn contains_any(diagnostic: &str, markers: &[&str]) -> bool {
+    markers.iter().any(|marker| diagnostic.contains(marker))
 }
 
 /// Static command-line arguments for the only permitted transport route.

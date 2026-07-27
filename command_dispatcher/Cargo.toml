@@ -1,0 +1,29 @@
+[package]
+name = "lightflow-auto-editing-command-dispatcher"
+version = "0.1.0"
+edition = "2024"
+description = "Deployment-owned closed dispatcher for LightFlow auto-editing command workflows."
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/lightjunction/lightflow-auto-editing"
+keywords = ["lightflow", "workflow", "dispatcher", "video"]
+categories = ["multimedia::video", "development-tools"]
+
+[[bin]]
+name = "lightflow-auto-editing-command-dispatcher"
+path = "src/main.rs"
+
+[dependencies]
+lightflow = { workspace = true }
+lightflow-video-auto-edit = { path = "../workflows/auto_edit", version = "0.1.0" }
+lightflow-video-auto-edit-plan = { path = "../workflows/auto_edit_plan", version = "0.1.0" }
+lightflow-video-cover-image = { path = "../workflows/cover_image", version = "0.1.0" }
+lightflow-video-render-edit = { path = "../workflows/render_edit", version = "0.1.0" }
+lightflow-video-subtitles = { path = "../workflows/subtitles", version = "0.1.0" }
+lightflow-video-description = { path = "../workflows/video_description", version = "0.1.0" }
+lightflow-video-highlights = { path = "../workflows/video_highlights", version = "0.1.0" }
+lightflow-video-work-speech = { path = "../workflows/video_work_speech", version = "0.1.0" }
+lightflow-video-work-subtitles = { path = "../workflows/video_work_subtitles", version = "0.1.0" }
+lightflow-video-work-voice-profile = { path = "../workflows/video_work_voice_profile", version = "0.1.0" }
+lightflow-xry-batch-control = { path = "../workflows/xry_batch_control", version = "0.1.0" }
+lightflow-xry-batch-produce = { path = "../workflows/xry_batch_produce", version = "0.1.0" }
+lightflow-xry-privacy-redaction = { path = "../workflows/xry_privacy_redaction", version = "0.1.0" }

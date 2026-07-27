@@ -58,6 +58,47 @@ fn ssh_route_is_fixed_and_is_a_subsystem() {
     );
 }
 
+#[test]
+fn nonzero_exit_classifies_public_key_authentication_rejection() {
+    assert_eq!(
+        classify_nonzero_gateway_exit(b"permission denied (publickey)."),
+        GatewayExitCategory::AuthenticationRejected
+    );
+}
+
+#[test]
+fn nonzero_exit_classifies_host_key_rejection() {
+    assert_eq!(
+        classify_nonzero_gateway_exit(b"host key verification failed."),
+        GatewayExitCategory::HostKeyRejected
+    );
+}
+
+#[test]
+fn nonzero_exit_classifies_fixed_subsystem_unavailability() {
+    assert_eq!(
+        classify_nonzero_gateway_exit(b"subsystem request failed on channel 0"),
+        GatewayExitCategory::FixedSubsystemUnavailable
+    );
+}
+
+#[test]
+fn nonzero_exit_classifies_fixed_route_unreachability() {
+    assert_eq!(
+        classify_nonzero_gateway_exit(
+            b"ssh: connect to host fixed-host port 22: network is unreachable"
+        ),
+        GatewayExitCategory::FixedRouteUnreachable
+    );
+}
+
+#[test]
+fn untrusted_stderr_falls_back_without_echoing_source_text() {
+    let error = nonzero_gateway_exit_error(b"remote message: secret=/private/path\xff");
+
+    assert_eq!(error.to_string(), "gateway canonical non-PASS: unknown");
+}
+
 #[cfg(unix)]
 #[test]
 fn fixed_user_config_requires_private_files_and_trusted_ancestry() {

@@ -42,6 +42,12 @@ HMAC-SHA256; auto-editing verifies that tag before probing or rendering.
   package's `package.metadata.lightflow.runner`; no deployment-owned
   `LIGHTFLOW_COMMAND_RUNNER` dispatcher is required.
 
+The in-tree deployment target is `lightflow-auto-editing-command-dispatcher`.
+Build it with `cargo build --release -p lightflow-auto-editing-command-dispatcher`
+and configure `LIGHTFLOW_COMMAND_RUNNER` to that resulting regular executable.
+It has a closed in-process route table for the current public command workflows;
+it does not discover package metadata, resolve paths from input, or start a shell.
+
 Package-owned runners are Rust-native. Media runners invoke only the required
 media tools (`ffprobe` and `ffmpeg`) through fixed argument vectors; Python is
 neither a runtime dependency nor an Agent-facing implementation path. The
