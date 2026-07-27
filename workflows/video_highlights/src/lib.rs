@@ -26,7 +26,7 @@ pub fn define() -> WorkflowSpec {
         output "clips": "json" { description: "Direct auto-edit clip objects derived from signed highlights; pass this output unchanged as clips or sources." }
         output "summary": "text" { description: "Model-backed highlight detection summary." }
     }
-    .builtin_runtime("command", "lightflow.command.run", "runner.v1")
+    .builtin_runtime("command", "lightflow.command.run", "process.command.v1")
     .build()
 }
 
