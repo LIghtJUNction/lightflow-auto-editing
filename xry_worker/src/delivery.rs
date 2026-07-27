@@ -87,9 +87,15 @@ where
     }
     let delivery = root.join("3.成品");
     let mut receipts = Vec::new();
-    for (account, id, video, cover) in [
-        (group, ze_id, "rendered.ze.mp4", "cover.ze.jpg"),
-        ("Ty Sun Motors", re_id, "rendered.re.mp4", "cover.re.jpg"),
+    for (account, id, video, cover, copy) in [
+        (group, ze_id, "rendered.ze.mp4", "cover.ze.jpg", ze_copy),
+        (
+            "Ty Sun Motors",
+            re_id,
+            "rendered.re.mp4",
+            "cover.re.jpg",
+            re_copy,
+        ),
     ] {
         let basename = format!("{subject_number}.{id}：{title}");
         let directory = delivery.join(account).join(&basename);
@@ -106,11 +112,6 @@ where
             &cover_original,
             &directory.join(format!("{basename}-封面原图.png")),
         )?;
-        let copy = if id.ends_with("-ZE") {
-            ze_copy
-        } else {
-            re_copy
-        };
         atomic_text(&directory.join(format!("{basename}.txt")), copy)?;
         receipts.push(json!({"account": account, "id": id, "directory": directory}));
     }
@@ -194,8 +195,8 @@ mod tests {
         let reference_root = temporary_directory("cover-references");
         let group = "专搞皮卡";
         let title = "示例皮卡";
-        let ze_id = "S01-ZE";
-        let re_id = "S01-RE";
+        let ze_id = "ze-client-42";
+        let re_id = "re-client-42";
         let reference = reference_root.join(group).join("reference.PNG");
         let reference_bytes = b"\x89PNG\r\n\x1a\nreference fixture";
         fs::create_dir_all(reference.parent().expect("reference parent"))

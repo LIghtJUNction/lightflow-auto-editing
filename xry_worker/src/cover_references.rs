@@ -22,17 +22,23 @@ pub(super) fn canonical_account_reference(
     Ok(reference)
 }
 
-pub(super) fn materialize_original(reference: &Path, production: &Path) -> Result<(), String> {
+pub(super) fn validate_png_reference(reference: &Path) -> Result<(), String> {
     let is_png = reference
         .extension()
         .and_then(|extension| extension.to_str())
         .is_some_and(|extension| extension.eq_ignore_ascii_case("png"));
     if !is_png {
-        return Err(
+        Err(
             "cover style reference must be a PNG before materializing cover-original.png"
                 .to_owned(),
-        );
+        )
+    } else {
+        Ok(())
     }
+}
+
+pub(super) fn materialize_original(reference: &Path, production: &Path) -> Result<(), String> {
+    validate_png_reference(reference)?;
     atomic_copy(reference, &production.join("cover-original.png"))
 }
 

@@ -123,8 +123,8 @@ fn emphasize(
         None => "{\\b1}".to_owned(),
     };
     let end_tag = match keyword_color {
-        Some(_) => format!("{{\\b0{restore_color}}}"),
-        None => "{\\b0}".to_owned(),
+        Some(_) => format!("{{\\b1{restore_color}}}"),
+        None => "{\\b1}".to_owned(),
     };
     let mut result = String::new();
     let mut cursor = 0;
@@ -165,14 +165,19 @@ mod tests {
 
     #[test]
     fn emphasizes_keywords_with_gold_bold() {
-        let text = emphasize("两万多预算的柴油皮卡", &["柴油皮卡"], Some(GOLD), None);
-        assert!(text.contains("{\\b1\\c&H2CA6D6&}柴油皮卡{\\b0\\c&HFFFFFF&}"));
+        let text = emphasize("两万多预算的柴油皮卡现车", &["柴油皮卡"], Some(GOLD), None);
+        assert!(text.contains("{\\b1\\c&H2CA6D6&}柴油皮卡{\\b1\\c&HFFFFFF&}现车"));
     }
 
     #[test]
     fn russian_lines_bold_only() {
-        let text = emphasize("Дизельный пикап", &["пикап"], None, Some(RU_YELLOW));
-        assert!(text.contains("{\\b1}пикап{\\b0}"));
+        let text = emphasize(
+            "Дизельный пикап надежный",
+            &["пикап"],
+            None,
+            Some(RU_YELLOW),
+        );
+        assert!(text.contains("{\\b1}пикап{\\b1} надежный"));
         assert!(!text.contains(GOLD));
     }
 

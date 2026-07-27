@@ -1,4 +1,6 @@
-use super::cover_references::{canonical_account_reference, materialize_original};
+use super::cover_references::{
+    canonical_account_reference, materialize_original, validate_png_reference,
+};
 use super::cover_render::cover_variant;
 use super::read_json;
 use serde_json::Value;
@@ -233,6 +235,7 @@ fn account_profile_at_reference_root(
         .and_then(Value::as_str)
         .ok_or("cover requires a style reference")?;
     let reference = canonical_account_reference(group, reference, reference_root)?;
+    validate_png_reference(&reference)?;
     let profile = match cover.get("profile_id").and_then(Value::as_str) {
         Some("rounded-smoke-gold") => CoverProfile::SmokeCard,
         Some("blue-slash") => CoverProfile::BlueCapsule,
@@ -322,6 +325,8 @@ pub(super) fn title_size(longest: usize, language: CoverLanguage) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
     fn rejects_missing_account_reference() {
@@ -343,6 +348,32 @@ mod tests {
         }))
         .expect_err("unknown profile must not render");
         assert!(error.contains("cover reference"));
+    }
+
+    #[test]
+    fn rejects_non_png_account_reference_before_rendering() {
+        let root = temporary_directory("non-png-reference");
+        let reference_root = root.join("0.参考");
+        let reference = reference_root.join("account").join("reference.jpg");
+        fs::create_dir_all(reference.parent().expect("reference parent"))
+            .expect("create reference directory");
+        fs::write(&reference, b"non-PNG reference").expect("write reference");
+
+        let error = account_profile_at_reference_root(
+            &serde_json::json!({
+                "group_name": "account",
+                "profile_id": "rounded-smoke-gold",
+                "style_references": [{"path": reference}]
+            }),
+            &reference_root,
+        )
+        .expect_err("a non-PNG reference must fail before cover rendering");
+        assert_eq!(
+            error,
+            "cover style reference must be a PNG before materializing cover-original.png"
+        );
+
+        fs::remove_dir_all(root).expect("remove temporary root");
     }
 
     #[test]
@@ -387,5 +418,18 @@ mod tests {
             wrong_ru,
             "cover headline_ru must contain Cyrillic characters"
         );
+    }
+
+    fn temporary_directory(label: &str) -> PathBuf {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock")
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!(
+            "lightflow-xry-worker-covers-{label}-{}-{nonce}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&path).expect("create temporary directory");
+        path
     }
 }
