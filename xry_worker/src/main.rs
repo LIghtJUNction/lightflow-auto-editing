@@ -6,6 +6,7 @@ use std::process::{Command, ExitCode};
 use serde_json::{Map, Value, json};
 
 mod audit;
+mod cover_references;
 mod cover_render;
 mod covers;
 mod delivery;
