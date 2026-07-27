@@ -1,8 +1,10 @@
 use std::fs;
+use std::io::Read;
 use std::path::{Component, Path, PathBuf};
 
 const INVALID_REFERENCE: &str =
     "cover reference must be an existing file under its account group in /srv/0.参考";
+const PNG_SIGNATURE: [u8; 8] = [137, 80, 78, 71, 13, 10, 26, 10];
 
 pub(super) fn canonical_account_reference(
     group: &str,
@@ -28,12 +30,16 @@ pub(super) fn validate_png_reference(reference: &Path) -> Result<(), String> {
         .and_then(|extension| extension.to_str())
         .is_some_and(|extension| extension.eq_ignore_ascii_case("png"));
     if !is_png {
-        Err(
-            "cover style reference must be a PNG before materializing cover-original.png"
-                .to_owned(),
-        )
-    } else {
+        return Err(invalid_png_reference());
+    }
+    let mut file = fs::File::open(reference).map_err(|_| invalid_png_reference())?;
+    let mut signature = [0; PNG_SIGNATURE.len()];
+    file.read_exact(&mut signature)
+        .map_err(|_| invalid_png_reference())?;
+    if signature == PNG_SIGNATURE {
         Ok(())
+    } else {
+        Err(invalid_png_reference())
     }
 }
 
@@ -63,6 +69,10 @@ fn is_single_normal_component(value: &str) -> bool {
 
 fn invalid_reference() -> String {
     INVALID_REFERENCE.to_owned()
+}
+
+fn invalid_png_reference() -> String {
+    "cover style reference must be a PNG before materializing cover-original.png".to_owned()
 }
 
 fn atomic_copy(source: &Path, destination: &Path) -> Result<(), String> {
@@ -212,6 +222,22 @@ mod tests {
             !production
                 .join(".cover-original.png.lightflow-staged")
                 .exists()
+        );
+
+        fs::remove_dir_all(root).expect("remove temporary root");
+    }
+
+    #[test]
+    fn rejects_non_png_contents_with_png_extension() {
+        let root = temporary_directory("invalid-png-contents");
+        let reference = root.join("reference.png");
+        fs::write(&reference, b"not a PNG").expect("write invalid PNG contents");
+
+        let error = validate_png_reference(&reference)
+            .expect_err("a PNG extension must not substitute for a PNG signature");
+        assert_eq!(
+            error,
+            "cover style reference must be a PNG before materializing cover-original.png"
         );
 
         fs::remove_dir_all(root).expect("remove temporary root");
