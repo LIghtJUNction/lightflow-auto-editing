@@ -117,6 +117,24 @@ fn package_rejects_overlong_delivery_filename_before_creating_output() {
 }
 
 #[test]
+fn delivery_basename_reserves_space_for_atomic_staging() {
+    let subject_number = "01";
+    let id = "ze-id";
+    let longest_suffix = "-封面原图.png";
+    let fixed_bytes = format!("{subject_number}.{id}：").len() + longest_suffix.len();
+    let maximum_title_bytes = MAX_DELIVERY_COMPONENT_BYTES - fixed_bytes;
+    let basename = delivery_basename(subject_number, id, &"a".repeat(maximum_title_bytes))
+        .expect("the exact atomic-staging boundary must be accepted");
+    let staged_name =
+        format!("{ATOMIC_STAGE_PREFIX}{basename}{longest_suffix}{ATOMIC_STAGE_SUFFIX}");
+    assert_eq!(staged_name.len(), MAX_FILENAME_COMPONENT_BYTES);
+
+    let error = delivery_basename(subject_number, id, &"a".repeat(maximum_title_bytes + 1))
+        .expect_err("one byte beyond the atomic-staging boundary must be rejected");
+    assert_eq!(error, "delivery filename is too long");
+}
+
+#[test]
 fn canonical_directory_delivery_with_four_files() {
     let root = temporary_directory("delivery-canonical-root");
     let production = temporary_directory("production-canonical");

@@ -8,6 +8,10 @@ use std::fs;
 use std::path::Path;
 
 const MAX_FILENAME_COMPONENT_BYTES: usize = 255;
+const ATOMIC_STAGE_PREFIX: &str = ".";
+const ATOMIC_STAGE_SUFFIX: &str = ".lightflow-staged";
+const MAX_DELIVERY_COMPONENT_BYTES: usize =
+    MAX_FILENAME_COMPONENT_BYTES - ATOMIC_STAGE_PREFIX.len() - ATOMIC_STAGE_SUFFIX.len();
 
 pub(super) fn package(task: &str, subject: &str, production: &Path) -> Result<Value, String> {
     package_at_root(task, subject, production, Path::new(ROOT))
@@ -170,7 +174,7 @@ fn delivery_basename(subject_number: &str, id: &str, title: &str) -> Result<Stri
     let basename = format!("{subject_number}.{id}：{title}");
     if ["", ".mp4", ".jpg", "-封面原图.png", ".txt"]
         .iter()
-        .any(|suffix| basename.len() + suffix.len() > MAX_FILENAME_COMPONENT_BYTES)
+        .any(|suffix| basename.len() + suffix.len() > MAX_DELIVERY_COMPONENT_BYTES)
     {
         return Err("delivery filename is too long".to_owned());
     }
@@ -186,7 +190,7 @@ fn atomic_copy(source: &Path, destination: &Path) -> Result<(), String> {
         .ok_or("delivery destination has no parent")?;
     fs::create_dir_all(parent).map_err(|error| error.to_string())?;
     let staged = parent.join(format!(
-        ".{}.lightflow-staged",
+        "{ATOMIC_STAGE_PREFIX}{}{ATOMIC_STAGE_SUFFIX}",
         destination
             .file_name()
             .and_then(|value| value.to_str())
@@ -200,7 +204,7 @@ fn atomic_text(path: &Path, value: &str) -> Result<(), String> {
     let parent = path.parent().ok_or("text destination has no parent")?;
     fs::create_dir_all(parent).map_err(|error| error.to_string())?;
     let staged = parent.join(format!(
-        ".{}.lightflow-staged",
+        "{ATOMIC_STAGE_PREFIX}{}{ATOMIC_STAGE_SUFFIX}",
         path.file_name()
             .and_then(|value| value.to_str())
             .ok_or("text destination has no valid filename")?
