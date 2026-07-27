@@ -11,6 +11,7 @@ pub const WORKFLOW_ID: &str = "lightflow.xry_batch_control";
 pub const WORKFLOW_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 const INPUTS: &[&str] = &["action", "task", "subject", "apply", "plan_sha256"];
+const IMPLEMENTATION: &str = concat!(env!("CARGO_PKG_NAME"), "@", env!("CARGO_PKG_VERSION"));
 
 pub fn define() -> WorkflowSpec {
     workflow! {
@@ -50,11 +51,7 @@ pub fn define() -> WorkflowSpec {
             description: "Verified canonical control outcome summary.",
         }
     }
-    .builtin_runtime(
-        "command",
-        "lightflow.command.run",
-        "process.command.v1",
-    )
+    .builtin_runtime("runner", "lightflow.runner", "runner.v1")
     .build()
 }
 
@@ -62,11 +59,13 @@ pub fn execute(inputs: &Map<String, Value>) -> Result<Response, ControlError> {
     let request = request_from_inputs(inputs)?;
     let action = request.action();
     let response = invoke(&request).map_err(ControlError::from)?;
-    let replay_fingerprint = response
-        .replay_fingerprint()
-        .as_object()
-        .cloned()
-        .ok_or_else(|| ControlError::new("gateway replay fingerprint must be an object"))?;
+    let replay_fingerprint = with_package_implementation(
+        response
+            .replay_fingerprint()
+            .as_object()
+            .cloned()
+            .ok_or_else(|| ControlError::new("gateway replay fingerprint must be an object"))?,
+    );
     Ok(Response {
         outputs: Map::from_iter([
             ("report".to_owned(), response.report().clone()),
@@ -82,6 +81,11 @@ pub fn execute(inputs: &Map<String, Value>) -> Result<Response, ControlError> {
         artifacts: Vec::new(),
         replay_fingerprint,
     })
+}
+
+fn with_package_implementation(mut fingerprint: Map<String, Value>) -> Map<String, Value> {
+    fingerprint.insert("implementation".to_owned(), IMPLEMENTATION.into());
+    fingerprint
 }
 
 fn request_from_inputs(inputs: &Map<String, Value>) -> Result<GatewayRequest, ControlError> {
@@ -185,11 +189,17 @@ mod tests {
         assert_eq!(definition.version, WORKFLOW_VERSION);
         assert_eq!(definition.inputs.len(), INPUTS.len());
         assert_eq!(definition.runtimes.len(), 1);
-        assert_eq!(definition.runtimes[0].id, "command");
-        assert_eq!(definition.runtimes[0].capability, "lightflow.command.run");
+        assert_eq!(definition.runtimes[0].id, "runner");
+        assert_eq!(definition.runtimes[0].capability, "lightflow.runner");
+        assert_eq!(definition.runtimes[0].engine.as_deref(), Some("runner.v1"));
+    }
+
+    #[test]
+    fn replay_fingerprint_identifies_this_package_runner() {
+        let fingerprint = with_package_implementation(Map::new());
         assert_eq!(
-            definition.runtimes[0].engine.as_deref(),
-            Some("process.command.v1")
+            fingerprint.get("implementation"),
+            Some(&Value::String(IMPLEMENTATION.to_owned()))
         );
     }
 

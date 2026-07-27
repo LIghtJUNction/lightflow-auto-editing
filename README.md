@@ -38,16 +38,15 @@ HMAC-SHA256; auto-editing verifies that tag before probing or rendering.
 
 - LightFlow from the parent checkout
 - FFmpeg and ffprobe in `PATH`
-- For workflows declaring `lightflow.command.run`, a deployment-owned regular
-  executable must be configured through `LIGHTFLOW_COMMAND_RUNNER`. It must
-  dispatch the versioned command contract for every declared workflow; do not
-  point this variable at an individual package runner.
+- For package-owned workflows, LightFlow starts the runner declared in that
+  package's `package.metadata.lightflow.runner`; no deployment-owned
+  `LIGHTFLOW_COMMAND_RUNNER` dispatcher is required.
 
 Package-owned runners are Rust-native. Media runners invoke only the required
 media tools (`ffprobe` and `ffmpeg`) through fixed argument vectors; Python is
 neither a runtime dependency nor an Agent-facing implementation path. The
-deployment-owned command runner is started directly without a shell and is a
-prerequisite for XRY command workflows.
+declared package runner is started directly without a shell and is the XRY
+execution boundary.
 
 ## End-To-End Workflow
 
@@ -152,11 +151,11 @@ lfw run lightflow.xry_batch_produce \
 ```
 
 `task` and `subject` are exact bindings, not paths or shell fragments. The
-deployment-owned command runner uses the fixed XRY gateway subsystem; it does
-not accept an SSH target, config, remote root, command, or arbitrary path from
-workflow input. The gateway returns production evidence only after its bound
-request and canonical `PASS` response verify. It cannot author EDL, captions,
-hooks, cover controls, cleanup, archive, or publication through this producer.
+package-owned runner uses the fixed XRY gateway subsystem; it does not accept
+an SSH target, config, remote root, command, or arbitrary path from workflow
+input. The gateway returns production evidence only after its bound request and
+canonical `PASS` response verify. It cannot author EDL, captions, hooks, cover
+controls, cleanup, archive, or publication through this producer.
 
 Before enabling that runner, the deployment owner provisions the invoking
 account's fixed `~/.config/lightflow/xry_gateway_identity` and
@@ -181,9 +180,9 @@ lfw run lightflow.xry_batch_control \
 ```
 
 Do not invoke XRY shell commands or implementation scripts directly from an
-Agent instruction, skill, or operator runbook. If the configured
-`LIGHTFLOW_COMMAND_RUNNER` or the gateway is unavailable, stop and report the
-blocker rather than adding a transport fallback.
+Agent instruction, skill, or operator runbook. If the declared package runner
+cannot be started or the gateway is unavailable, stop and report the blocker
+rather than adding a transport fallback.
 
 The end-to-end workflow accepts only explicitly supplied source ranges. A
 VideoScore highlight must identify the same canonical source path and match the
@@ -246,16 +245,16 @@ runner is Rust-native and is not an Agent-facing CLI.
 ## Package Runner Contract
 
 All workflows explicitly declare their runtime requirements. The automatic
-editing and XRY workflows use the shared command boundary:
+editing and XRY workflows use the package-owned runner boundary:
 
 ```text
-capability: lightflow.command.run
-engine:     process.command.v1
-protocol:   lightflow.command.v1
-runner:     deployment-owned LIGHTFLOW_COMMAND_RUNNER executable
+capability: lightflow.runner
+engine:     runner.v1
+protocol:   lightflow.runner.v1
+runner:     package-declared Cargo binary
 ```
 
-LightFlow starts that configured executable directly, never through a shell. A
+LightFlow starts that declared binary directly, never through a shell. A
 versioned JSON request is written to stdin and a bounded JSON response is read
 from stdout. The core enforces timeout, output-size, declared-output, artifact,
 and replay-fingerprint checks. Package-owned runners validate their exact

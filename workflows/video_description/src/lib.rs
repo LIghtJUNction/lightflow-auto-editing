@@ -18,7 +18,7 @@ pub fn define() -> WorkflowSpec {
     input "transcript": "text" { description: "Approved edited transcript.", required: true, widget: "textarea", }
     output "description": "json" { description: "Fact-checked model title, body, and hashtags." }
     output "summary": "text" { description: "Rust-native description workflow summary." }
-}.builtin_runtime("command", "lightflow.command.run", "process.command.v1").build()
+}.builtin_runtime("runner", "lightflow.runner", "runner.v1").build()
 }
 
 pub fn execute(inputs: &Map<String, Value>) -> Result<Response, DescriptionError> {

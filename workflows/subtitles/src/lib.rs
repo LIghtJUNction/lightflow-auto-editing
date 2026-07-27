@@ -72,11 +72,7 @@ pub fn define() -> WorkflowSpec {
             description: "Human-readable subtitle export and burn-in summary.",
         }
     }
-        .builtin_runtime(
-            "command",
-            "lightflow.command.run",
-            "process.command.v1",
-        )
+        .builtin_runtime("runner", "lightflow.runner", "runner.v1")
         .build()
 }
 

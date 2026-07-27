@@ -16,7 +16,7 @@ pub fn define() -> WorkflowSpec {
         }
         output "subtitles": "json" { description: "Video Work API subtitle result and timing evidence." }
         output "summary": "text" { description: "Rust-native workflow summary." }
-    }.builtin_runtime("command", "lightflow.command.run", "process.command.v1").build()
+    }.builtin_runtime("runner", "lightflow.runner", "runner.v1").build()
 }
 
 pub fn execute(inputs: &Map<String, Value>) -> Result<Response, VideoWorkError> {

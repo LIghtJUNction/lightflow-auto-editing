@@ -38,11 +38,7 @@ pub fn define() -> WorkflowSpec {
             description: "Human-readable summary of the planned edit.",
         }
     }
-        .builtin_runtime(
-            "command",
-            "lightflow.command.run",
-            "process.command.v1",
-        )
+        .builtin_runtime("runner", "lightflow.runner", "runner.v1")
         .build()
 }
 
