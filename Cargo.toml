@@ -2,6 +2,7 @@
 resolver = "3"
 members = [
   "video_work_mcp",
+  "xry_gateway",
   "xry_worker",
   "workflows/video_description",
   "workflows/video_highlights",
@@ -22,3 +23,6 @@ members = [
 lightflow = { version = "0.1.4", path = "../..", default-features = false }
 lightflow-auto-edit-runtime = { version = "0.1.0", path = "runtime" }
 lightflow-video-work-mcp = { version = "0.1.0", path = "video_work_mcp" }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.150"
+sha2 = "0.10.9"

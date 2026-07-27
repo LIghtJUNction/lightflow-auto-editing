@@ -1,221 +1,160 @@
-use std::process::Command;
+//! Public, fail-closed production entrypoint for one frozen XRY task subject.
+
+use std::fmt;
 
 use lightflow::preload::*;
 use lightflow::runner::Response;
 use lightflow::serde_json::{Map, Value};
+use lightflow_xry_gateway::{GatewayError, GatewayRequest, invoke};
 
 pub const WORKFLOW_ID: &str = "lightflow.xry_batch_produce";
 pub const WORKFLOW_VERSION: &str = env!("CARGO_PKG_VERSION");
 
-const STAGES: &[&str] = &[
-    "ensure-ids",
-    "ensure-publication",
-    "subtitles",
-    "hook-evidence",
-    "pre-render",
-    "render",
-    "cover",
-    "package",
-    "pre-package",
-    "task-state",
-];
+const INPUTS: &[&str] = &["task", "subject"];
 
 pub fn define() -> WorkflowSpec {
     workflow! {
         name: "XRY Batch Produce",
-        description: "Rust-native LightFlow boundary for canonical XRY production.",
+        description: "Run the canonical XRY production chain for one frozen task subject through the locked gateway.",
         input "task": "text" {
-            description: "Existing task relative to /srv/xry/2.预处理/.",
+            description: "Exact frozen task binding: 批量剪辑/<group>/<batch>.",
             required: true,
             widget: "text",
         }
         input "subject": "text" {
-            description: "Subject ID such as S01.",
+            description: "Exact frozen subject binding, for example S01.",
             required: true,
             widget: "text",
         }
-        input "commit_package": "boolean" {
-            description: "Allows validated package commit.",
-            required: false,
-            default: false,
-            widget: "checkbox",
+        output "worker_context": "json" {
+            description: "Canonical, bound worker context returned only after verified gateway PASS.",
         }
-        input "from_stage": "text" {
-            description: "Optional canonical resume stage.",
-            required: false,
-            widget: "select",
-            choices: ["ensure-ids", "ensure-publication", "subtitles", "hook-evidence", "pre-render", "render", "cover", "package", "pre-package", "task-state"],
+        output "production_report": "json" {
+            description: "Opaque canonical production report returned only after verified gateway PASS.",
         }
-        input "to_stage": "text" {
-            description: "Optional canonical end stage.",
-            required: false,
-            widget: "select",
-            choices: ["ensure-ids", "ensure-publication", "subtitles", "hook-evidence", "pre-render", "render", "cover", "package", "pre-package", "task-state"],
+        output "task_state_path": "text" {
+            description: "Canonical task-state path reported by the XRY gateway.",
         }
-        output "production_report": "json" { description: "Canonical production report." }
-        output "task_state_path": "path" { description: "Canonical task-state snapshot." }
-        output "summary": "text" { description: "Rust-native production summary." }
+        output "summary": "text" {
+            description: "Verified canonical production outcome summary.",
+        }
     }
-    .builtin_runtime("command", "lightflow.command.run", "runner.v1")
+    .builtin_runtime(
+        "command",
+        "lightflow.command.run",
+        "process.command.v1",
+    )
     .build()
 }
 
 pub fn execute(inputs: &Map<String, Value>) -> Result<Response, ProduceError> {
-    let task = safe_task(required_text(inputs, "task")?)?;
-    let subject = safe_subject(required_text(inputs, "subject")?)?;
-    let commit = inputs
-        .get("commit_package")
-        .and_then(Value::as_bool)
-        .unwrap_or(false);
-    let from = optional_stage(inputs, "from_stage")?;
-    let to = optional_stage(inputs, "to_stage")?;
-    if let (Some(from), Some(to)) = (from, to)
-        && stage_index(from) > stage_index(to)
-    {
-        return Err(ProduceError::new("from_stage must not follow to_stage"));
-    }
-    if commit {
-        return Err(ProduceError::new(
-            "package commit is intentionally unavailable until the Rust delivery audit is implemented",
-        ));
-    }
-    if from.is_some() || to.is_some() {
-        return Err(ProduceError::new(
-            "stage slicing is unavailable in the Rust worker; it always rerenders the full rejected subject",
-        ));
-    }
-    let command = vec![
-        "/srv/.lightflow/bin/lightflow-xry-worker",
-        "produce",
-        "--task",
-        &task,
-        "--subject",
-        &subject,
-    ];
-    let output = Command::new("ssh")
-        .args([
-            "-F",
-            "/home/lightjunction/.ssh/config",
-            "-o",
-            "ControlMaster=no",
-            "-o",
-            "ControlPath=none",
-            "-o",
-            "ControlPersist=no",
-            "xry",
-        ])
-        .args(command)
-        .output()
-        .map_err(|error| ProduceError::owned(format!("cannot start XRY production: {error}")))?;
-    if !output.status.success() {
-        return Err(ProduceError::owned(format!(
-            "XRY production failed ({}): {}",
-            output.status,
-            String::from_utf8_lossy(&output.stderr).trim()
-        )));
-    }
-    let report: Value = lightflow::serde_json::from_slice(&output.stdout)
-        .map_err(|error| ProduceError::owned(format!("XRY returned invalid JSON: {error}")))?;
+    let request = request_from_inputs(inputs)?;
+    let response = invoke(&request).map_err(ProduceError::from)?;
+    let result = response.production_result().map_err(ProduceError::from)?;
+    let replay_fingerprint = response
+        .replay_fingerprint()
+        .as_object()
+        .cloned()
+        .ok_or_else(|| ProduceError::new("gateway replay fingerprint must be an object"))?;
     Ok(Response {
         outputs: Map::from_iter([
-            ("production_report".to_owned(), report),
-            (
-                "task_state_path".to_owned(),
-                format!("/srv/2.预处理/{task}/.pipeline/task-state.json").into(),
-            ),
+            ("worker_context".to_owned(), result.worker_context),
+            ("production_report".to_owned(), result.production_report),
+            ("task_state_path".to_owned(), result.task_state_path.into()),
             (
                 "summary".to_owned(),
-                "XRY canonical production completed through Rust-native LightFlow.".into(),
+                "Canonical production PASS was verified for the bound XRY task subject.".into(),
             ),
         ]),
         artifacts: Vec::new(),
-        replay_fingerprint: Map::from_iter([
-            (
-                "implementation".to_owned(),
-                implementation_identity().into(),
-            ),
-            ("task".to_owned(), task.into()),
-            ("subject".to_owned(), subject.into()),
-        ]),
+        replay_fingerprint,
     })
 }
 
-fn required_text<'a>(
-    inputs: &'a Map<String, Value>,
-    name: &'static str,
-) -> Result<&'a str, ProduceError> {
+fn request_from_inputs(inputs: &Map<String, Value>) -> Result<GatewayRequest, ProduceError> {
+    if !inputs.keys().all(|name| INPUTS.contains(&name.as_str())) {
+        return Err(ProduceError::new(
+            "production request contains an unsupported input",
+        ));
+    }
+    let task = required_text(inputs, "task")?;
+    let subject = required_text(inputs, "subject")?;
+    GatewayRequest::produce(task, subject).map_err(ProduceError::from)
+}
+
+fn required_text<'a>(inputs: &'a Map<String, Value>, name: &str) -> Result<&'a str, ProduceError> {
     inputs
         .get(name)
         .and_then(Value::as_str)
-        .filter(|value| !value.trim().is_empty())
-        .map(str::trim)
-        .ok_or_else(|| ProduceError::new("missing required text input"))
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| {
+            ProduceError::new("production request has a missing or invalid required text input")
+        })
 }
-fn safe_task(value: &str) -> Result<String, ProduceError> {
-    if !(value.starts_with("批量剪辑/") || value.starts_with("精剪/"))
-        || value.split('/').any(|part| part.is_empty() || part == "..")
-    {
-        return Err(ProduceError::new(
-            "task must be a safe path below 批量剪辑/ or 精剪/",
-        ));
-    }
-    Ok(value.to_owned())
-}
-fn safe_subject(value: &str) -> Result<String, ProduceError> {
-    if !value.starts_with('S')
-        || !value[1..]
-            .chars()
-            .all(|character| character.is_ascii_digit())
-    {
-        return Err(ProduceError::new("subject must be an S-number"));
-    }
-    Ok(value.to_owned())
-}
-fn optional_stage<'a>(
-    inputs: &'a Map<String, Value>,
-    name: &'static str,
-) -> Result<Option<&'a str>, ProduceError> {
-    match inputs.get(name) {
-        None => Ok(None),
-        Some(Value::String(value)) if STAGES.contains(&value.as_str()) => Ok(Some(value.as_str())),
-        Some(_) => Err(ProduceError::new("stage must be canonical")),
-    }
-}
-fn stage_index(stage: &str) -> usize {
-    STAGES
-        .iter()
-        .position(|candidate| *candidate == stage)
-        .expect("validated stage")
-}
-fn implementation_identity() -> String {
-    format!(
-        "lightflow.xry_batch_produce.rust.fnv1a64:{:016x}",
-        digest(include_bytes!("lib.rs"))
-    )
-}
-const fn digest(bytes: &[u8]) -> u64 {
-    let mut hash = 0xcbf2_9ce4_8422_2325;
-    let mut index = 0;
-    while index < bytes.len() {
-        hash ^= bytes[index] as u64;
-        hash = hash.wrapping_mul(0x100_0000_01b3);
-        index += 1;
-    }
-    hash
-}
+
 #[derive(Debug)]
 pub struct ProduceError(String);
+
 impl ProduceError {
-    fn new(value: impl Into<String>) -> Self {
-        Self(value.into())
-    }
-    fn owned(value: String) -> Self {
-        Self(value)
+    fn new(message: impl Into<String>) -> Self {
+        Self(message.into())
     }
 }
-impl std::fmt::Display for ProduceError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+
+impl From<GatewayError> for ProduceError {
+    fn from(error: GatewayError) -> Self {
+        Self(error.to_string())
+    }
+}
+
+impl fmt::Display for ProduceError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(&self.0)
     }
 }
+
 impl std::error::Error for ProduceError {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use lightflow::serde_json::json;
+
+    fn valid_inputs() -> Map<String, Value> {
+        Map::from_iter([
+            (
+                "task".to_owned(),
+                json!("批量剪辑/皮卡严选 走全球/7.23批量"),
+            ),
+            ("subject".to_owned(), json!("S01")),
+        ])
+    }
+
+    #[test]
+    fn definition_uses_the_package_identity_and_only_bound_inputs() {
+        let definition = define();
+        assert_eq!(definition.id, WORKFLOW_ID);
+        assert_eq!(definition.version, WORKFLOW_VERSION);
+        assert_eq!(definition.inputs.len(), INPUTS.len());
+        assert_eq!(definition.runtimes.len(), 1);
+        assert_eq!(definition.runtimes[0].id, "command");
+        assert_eq!(definition.runtimes[0].capability, "lightflow.command.run");
+        assert_eq!(
+            definition.runtimes[0].engine.as_deref(),
+            Some("process.command.v1")
+        );
+    }
+
+    #[test]
+    fn request_rejects_legacy_stage_or_package_controls() {
+        assert!(request_from_inputs(&valid_inputs()).is_ok());
+
+        let mut legacy = valid_inputs();
+        legacy.insert("commit_package".to_owned(), json!(true));
+        assert!(request_from_inputs(&legacy).is_err());
+
+        let mut missing = valid_inputs();
+        missing.remove("subject");
+        assert!(request_from_inputs(&missing).is_err());
+    }
+}

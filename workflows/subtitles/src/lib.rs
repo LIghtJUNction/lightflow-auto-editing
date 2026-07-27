@@ -75,7 +75,7 @@ pub fn define() -> WorkflowSpec {
         .builtin_runtime(
             "command",
             "lightflow.command.run",
-            "runner.v1",
+            "process.command.v1",
         )
         .build()
 }

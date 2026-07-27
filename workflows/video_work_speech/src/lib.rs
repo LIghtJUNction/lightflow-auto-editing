@@ -14,7 +14,7 @@ pub fn define() -> WorkflowSpec {
     input "speed": "number" { description: "Speech speed from 0.75 through 1.25.", required: false, default: 1.0, range: [0.75, 1.25, 0.05], widget: "slider", }
     output "generation": "json" { description: "Completed Video Work API generation result with audio metadata." }
     output "summary": "text" { description: "Rust-native workflow summary." }
-}.builtin_runtime("command", "lightflow.command.run", "runner.v1").build()
+}.builtin_runtime("command", "lightflow.command.run", "process.command.v1").build()
 }
 
 pub fn execute(inputs: &Map<String, Value>) -> Result<Response, SpeechError> {

@@ -15,7 +15,7 @@ pub fn define() -> WorkflowSpec {
     input "confirm_rights": "boolean" { description: "Must be true only after explicit informed rights confirmation.", required: true, widget: "checkbox", }
     output "voice_profile": "json" { description: "Created Video Work API voice profile." }
     output "summary": "text" { description: "Rust-native workflow summary." }
-}.builtin_runtime("command", "lightflow.command.run", "runner.v1").build()
+}.builtin_runtime("command", "lightflow.command.run", "process.command.v1").build()
 }
 
 pub fn execute(inputs: &Map<String, Value>) -> Result<Response, VoiceError> {

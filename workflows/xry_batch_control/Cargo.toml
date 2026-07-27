@@ -14,3 +14,4 @@ path = "src/bin/runner.rs"
 
 [dependencies]
 lightflow = { workspace = true }
+lightflow-xry-gateway = { path = "../../xry_gateway" }

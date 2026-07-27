@@ -1,31 +1,21 @@
 ---
 name: xry-lightflow-batch-production
-description: Rerender rejected XRY batch subjects through the deployed Rust LightFlow worker.
-version: 0.2.0
+description: Use for the complete canonical XRY production chain for one frozen task subject through LightFlow.
+version: 0.1.0
 ---
 
-# XRY batch production through LightFlow
+# LightFlow XRY Batch Production
 
-Use `lightflow.xry_batch_produce` for one existing subject in a task under
-`/srv/2.预处理/批量剪辑/`. Its published `runner.v1` binary invokes the
-deployed Rust worker on `ssh xry`. The subject must already be marked
-`REJECTED`; this is intentional so a stale or failed output cannot be silently
-reused. `cover-spec.json` must explicitly provide `headline_zh` containing CJK
-characters for ZE and `headline_ru` containing Cyrillic characters for RE.
-The worker does not infer either headline from IDs, subtitles, a generic
-`headline`, or the EDL; invalid cover text leaves both existing cover files
-untouched.
+Use `lightflow.xry_batch_produce` only after the Planner has selected one exact
+frozen `批量剪辑/<完整分组名>/<批次名>` task and one exact `Sxx` subject. The
+gateway owns the complete canonical production chain and returns the bound
+worker context only in a verified canonical `PASS` response.
 
-The workflow rerenders the frozen EDL and captions without a shell, creates ZE
-(Chinese/English) and RE (Russian/English), and creates two account-specific
-vehicle-frame covers. It does not package a delivery. Run the separate
-`lightflow.xry_batch_control` action `audit`, then `package`; the worker rejects
-both packaging and delivery whenever the current quality gate fails.
-
-`commit_package`, `from_stage`, and `to_stage` are retained only for contract
-compatibility and are rejected by the Rust worker.
-
-## CLI Usage
+Do not supply legacy stage, package, path, command, or shell controls. Do not
+call an XRY renderer, validator, cover tool, acceptance tool, or internal CLI
+directly. If the gateway is unavailable, a request or response does not match
+the bound task and subject, or canonical `PASS` is absent, stop and return the
+blocker to the Planner; never synthesize a worker context or acceptance result.
 
 ```bash
 lfw run lightflow.xry_batch_produce \
@@ -33,10 +23,11 @@ lfw run lightflow.xry_batch_produce \
   --input subject='"S01"'
 ```
 
-## API Usage
+The returned `worker_context`, `production_report`, and `task_state_path` are
+canonical evidence for that one run. They do not authorize cleanup, archive, or
+publication; those require their own LightFlow control workflows and gates.
 
-Start `lfw serve`, then call the shared HTTP
-workflow contract:
+## HTTP Usage
 
 ```bash
 curl -sS -X POST http://127.0.0.1:5174/workflows/lightflow.xry_batch_produce/run \
