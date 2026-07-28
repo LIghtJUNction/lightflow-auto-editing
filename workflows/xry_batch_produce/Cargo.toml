@@ -8,6 +8,9 @@ repository = "https://github.com/lightjunction/lightflow-auto-editing"
 keywords = ["lightflow", "workflow", "video", "xry"]
 categories = ["multimedia::video", "development-tools"]
 
+[package.metadata.lightflow]
+runner = "lightflow-xry-batch-produce-runner"
+
 [[bin]]
 name = "lightflow-xry-batch-produce-runner"
 path = "src/bin/runner.rs"

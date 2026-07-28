@@ -5,6 +5,9 @@ edition = "2024"
 description = "Restricted LightFlow control surface for canonical XRY batch operations."
 license = "MIT OR Apache-2.0"
 
+[package.metadata.lightflow]
+runner = "lightflow-xry-batch-control-runner"
+
 [[bin]]
 name = "lightflow-xry-batch-control-runner"
 path = "src/bin/runner.rs"
