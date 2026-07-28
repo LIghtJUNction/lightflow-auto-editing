@@ -11,6 +11,11 @@ Use `lightflow.xry_batch_control` only for one exact frozen
 only public agent entrypoint for `progress`, `freeze`, `cleanup`, and `archive`.
 The workflow has no global status mode and no arbitrary path or shell input.
 
+Its deployed `lightflow.command.v1` runtime is a closed `process.command.v1`
+boundary for this exact workflow only. On `xry`, invoke it only through
+`/srv/.lightflow/bin/lfw-xry`; bare `lfw`, HTTP endpoints, the dispatcher,
+release binaries, the gateway, and all direct XRY tools are forbidden.
+
 The public workflow uses a locked, framed gateway protocol. Never replace it
 with direct SSH, an XRY command, a renderer, a validator, or a locally inferred
 task state. If the gateway does not return its verified canonical `PASS`, stop
@@ -24,7 +29,7 @@ workflow for production, packaging, publishing, deletion outside its plan, or
 reference-tree edits.
 
 ```bash
-lfw run lightflow.xry_batch_control \
+/srv/.lightflow/bin/lfw-xry run lightflow.xry_batch_control \
   --input action='"progress"' \
   --input task='"批量剪辑/皮卡严选 走全球/7.23批量"' \
   --input subject='"S01"'
@@ -32,18 +37,10 @@ lfw run lightflow.xry_batch_control \
 
 ```bash
 # Only after the user confirms this exact plan SHA-256 from a prior dry run.
-lfw run lightflow.xry_batch_control \
+/srv/.lightflow/bin/lfw-xry run lightflow.xry_batch_control \
   --input action='"archive"' \
   --input task='"批量剪辑/皮卡严选 走全球/7.23批量"' \
   --input subject='"S01"' \
   --input apply=true \
   --input plan_sha256='"<confirmed-plan-sha256>"'
-```
-
-## HTTP Usage
-
-```bash
-curl -sS -X POST http://127.0.0.1:5174/workflows/lightflow.xry_batch_control/run \
-  -H 'content-type: application/json' \
-  -d '{"inputs":{"action":"progress","task":"批量剪辑/皮卡严选 走全球/7.23批量","subject":"S01"}}'
 ```

@@ -51,7 +51,7 @@ pub fn define() -> WorkflowSpec {
             description: "Verified canonical control outcome summary.",
         }
     }
-    .builtin_runtime("runner", "lightflow.runner", "runner.v1")
+    .builtin_runtime("command", "lightflow.command.run", "process.command.v1")
     .build()
 }
 
@@ -183,15 +183,18 @@ mod tests {
     }
 
     #[test]
-    fn definition_uses_the_package_identity_and_fixed_actions() {
+    fn definition_uses_the_command_runtime_and_fixed_actions() {
         let definition = define();
         assert_eq!(definition.id, WORKFLOW_ID);
         assert_eq!(definition.version, WORKFLOW_VERSION);
         assert_eq!(definition.inputs.len(), INPUTS.len());
         assert_eq!(definition.runtimes.len(), 1);
-        assert_eq!(definition.runtimes[0].id, "runner");
-        assert_eq!(definition.runtimes[0].capability, "lightflow.runner");
-        assert_eq!(definition.runtimes[0].engine.as_deref(), Some("runner.v1"));
+        assert_eq!(definition.runtimes[0].id, "command");
+        assert_eq!(definition.runtimes[0].capability, "lightflow.command.run");
+        assert_eq!(
+            definition.runtimes[0].engine.as_deref(),
+            Some("process.command.v1")
+        );
     }
 
     #[test]

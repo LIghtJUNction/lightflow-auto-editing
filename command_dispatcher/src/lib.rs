@@ -1,12 +1,16 @@
 //! Closed in-process dispatch for the public auto-editing command workflows.
 //!
 //! This crate is the deployment-owned target for `LIGHTFLOW_COMMAND_RUNNER`.
-//! It accepts the shared `lightflow.runner.v1` request envelope and can only
-//! route to the libraries compiled into this executable.
+//! It accepts the shared `lightflow.runner.v1` envelope for the existing
+//! public routes and the generic `lightflow.command.v1` envelope only for the
+//! two bound XRY routes. Both paths can only route to libraries compiled into
+//! this executable.
 
+mod command_protocol;
+
+use command_protocol::{CommandRequest, ProtocolRequest};
 use lightflow::runner::{
-    Request, Response, RunnerResult, read_request, read_request_from_stdin, write_response,
-    write_response_to_stdout,
+    PROTOCOL as RUNNER_PROTOCOL, Request, Response, RunnerResult, read_request, write_response,
 };
 use std::io::{Read, Write};
 
@@ -148,6 +152,34 @@ pub fn dispatch(request: &Request) -> RunnerResult<Response> {
     route.execute(request)
 }
 
+/// Dispatch one generic command request through the two exact public XRY routes.
+///
+/// The generic command boundary is deliberately narrower than the shared runner
+/// route table: it cannot select any other public workflow.
+fn dispatch_command(request: CommandRequest) -> RunnerResult<Response> {
+    let route = match (
+        request.workflow.id.as_str(),
+        request.workflow.version.as_str(),
+    ) {
+        (
+            lightflow_xry_batch_control::WORKFLOW_ID,
+            lightflow_xry_batch_control::WORKFLOW_VERSION,
+        ) => Route::XryBatchControl,
+        (
+            lightflow_xry_batch_produce::WORKFLOW_ID,
+            lightflow_xry_batch_produce::WORKFLOW_VERSION,
+        ) => Route::XryBatchProduce,
+        _ => return Err("unsupported generic LightFlow XRY workflow identity".into()),
+    };
+    let request = Request {
+        protocol: RUNNER_PROTOCOL.to_owned(),
+        workflow: request.workflow,
+        inputs: request.inputs,
+        models: request.models,
+    };
+    route.execute(&request)
+}
+
 /// Read, route, and write one exchange using the shared runner protocol helpers.
 ///
 /// # Errors
@@ -161,31 +193,51 @@ pub fn run_stream(reader: &mut impl Read, writer: &mut impl Write) -> RunnerResu
     Ok(())
 }
 
+/// Read, route, and write either supported dispatcher protocol.
+///
+/// The generic command envelope is parsed strictly before it can select a
+/// route or reach an XRY workflow. The legacy runner envelope keeps its
+/// existing parsing and routing semantics.
+pub fn run_protocol_stream(reader: &mut impl Read, writer: &mut impl Write) -> RunnerResult<()> {
+    match command_protocol::read_protocol_request(reader)? {
+        ProtocolRequest::Runner(request) => {
+            let response = dispatch(&request)?;
+            write_response(writer, &response)?;
+        }
+        ProtocolRequest::Command(request) => {
+            let response = dispatch_command(request)?;
+            command_protocol::write_command_response(writer, response)?;
+        }
+    }
+    Ok(())
+}
+
 /// Run one command exchange over standard input and output.
 ///
 /// # Errors
 ///
-/// Returns an error when the shared command request cannot be read, is not an
-/// allow-listed workflow identity, is rejected by that workflow, or its response
-/// cannot be written to standard output.
+/// Returns an error when the request cannot be read, is not an allow-listed
+/// workflow identity for its protocol, is rejected by that workflow, or its
+/// response cannot be written to standard output.
 pub fn run_from_stdio() -> RunnerResult<()> {
-    let request = read_request_from_stdin()?;
-    let response = dispatch(&request)?;
-    write_response_to_stdout(&response)?;
-    Ok(())
+    let stdin = std::io::stdin();
+    let stdout = std::io::stdout();
+    let mut reader = stdin.lock();
+    let mut writer = stdout.lock();
+    run_protocol_stream(&mut reader, &mut writer)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use lightflow::runner::{PROTOCOL, WorkflowIdentity};
+    use lightflow::runner::WorkflowIdentity;
     use lightflow::serde_json::{Map, Value, to_vec};
     use std::collections::BTreeMap;
     use std::io::Cursor;
 
     fn request(workflow_id: &str, workflow_version: &str, inputs: Map<String, Value>) -> Request {
         Request {
-            protocol: PROTOCOL.to_owned(),
+            protocol: RUNNER_PROTOCOL.to_owned(),
             workflow: WorkflowIdentity {
                 id: workflow_id.to_owned(),
                 version: workflow_version.to_owned(),
@@ -283,6 +335,23 @@ mod tests {
         request.protocol = "lightflow.command.v1".to_owned();
 
         let error = dispatch(&request).expect_err("wrong protocol must fail closed");
-        assert!(error.to_string().contains(PROTOCOL));
+        assert!(error.to_string().contains(RUNNER_PROTOCOL));
+    }
+
+    #[test]
+    fn protocol_stream_keeps_runner_v1_dispatch_behavior() {
+        let request = request(
+            lightflow_video_auto_edit_plan::WORKFLOW_ID,
+            lightflow_video_auto_edit_plan::WORKFLOW_VERSION,
+            Map::new(),
+        );
+        let mut reader = Cursor::new(to_vec(&request).expect("request encoding"));
+        let mut output = Vec::new();
+
+        let error = run_protocol_stream(&mut reader, &mut output)
+            .expect_err("missing plan inputs must be rejected before external execution");
+
+        assert!(error.to_string().contains("clips"));
+        assert!(output.is_empty());
     }
 }
