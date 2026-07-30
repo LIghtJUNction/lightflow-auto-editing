@@ -1,0 +1,14 @@
+[Unit]
+Description=XRY automatic editing progress dashboard
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/srv/.lightflow/runtime/xry-dashboard/current/dashboard
+ExecStart=/usr/bin/python3 /srv/.lightflow/runtime/xry-dashboard/current/dashboard/server.py
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=default.target
