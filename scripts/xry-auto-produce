@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+readonly MATERIAL_ROOT=/srv/1.素材/批量剪辑
+readonly PREPROCESS_ROOT=/srv/2.预处理/批量剪辑
+readonly LFW=/srv/.lightflow/bin/lfw-xry
+readonly CONFIG=/srv/.lightflow/runtime/xry-dashboard.json
+readonly LOCK_FILE=/home/xry/.lightflow/xry-auto-produce.lock
+
+exec 9>"$LOCK_FILE"
+flock -n 9 || exit 0
+
+selected_task() {
+  [[ ! -f "$CONFIG" ]] || jq -e --arg value "$1" \
+    '((.enabled_tasks // []) | length == 0) or ((.enabled_tasks // []) | index($value) != null)' \
+    "$CONFIG" >/dev/null 2>&1
+}
+
+selected_source() {
+  [[ ! -f "$CONFIG" ]] || jq -e --arg value "$1" \
+    '((.enabled_sources // []) | length == 0) or ((.enabled_sources // []) | index($value) != null)' \
+    "$CONFIG" >/dev/null 2>&1
+}
+
+has_media() {
+  find "$1" -maxdepth 1 -type f \( -iname '*.mp4' -o -iname '*.mov' -o -iname '*.m4v' -o -iname '*.mkv' \) \
+    -print -quit | grep -q .
+}
+
+while IFS= read -r -d '' material_dir; do
+  relative="${material_dir#"$MATERIAL_ROOT"/}"
+  [[ "$relative" != */*/* ]] || continue
+  has_media "$material_dir" || continue
+
+  if [[ "$relative" == */* ]]; then
+    source_key="${relative%%/*}"
+    task="批量剪辑/$relative"
+    preprocess_relative="$relative"
+  else
+    source_key="$relative"
+    task="批量剪辑/未分类/$relative"
+    preprocess_relative="未分类/$relative"
+  fi
+  if ! selected_source "$source_key" && ! selected_source "$relative"; then
+    continue
+  fi
+  selected_task "$task" || continue
+
+  production_dir="$PREPROCESS_ROOT/$preprocess_relative/.pipeline/production"
+  [[ -d "$production_dir" ]] || continue
+  while IFS= read -r -d '' subject_dir; do
+    subject="$(basename "$subject_dir")"
+    progress="$($LFW run lightflow.xry_batch_control -i action=progress -i "task=$task" -i "subject=$subject" 2>/dev/null || true)"
+    [[ "$progress" == *'"render_policy_current": true'* ]] && continue
+    "$LFW" run lightflow.xry_batch_produce -i "task=$task" -i "subject=$subject" || true
+  done < <(find "$production_dir" -mindepth 1 -maxdepth 1 -type d -name 'S[0-9][0-9]' -print0 | sort -z)
+done < <(find "$MATERIAL_ROOT" -mindepth 1 -maxdepth 3 -type d -print0 | sort -z)
